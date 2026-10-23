@@ -1,4 +1,4 @@
-﻿/*
+/*
  * DirectStart - runtime for the standalone Windows 8.1 start-menu d3d11 proxy.
  *
  * Uses:
@@ -1458,7 +1458,10 @@ BOOL DS_HookSymbols(
         }
         else if (slot)
         {
-            *slot = target;
+            if (!*slot)
+            {
+                *slot = target;
+            }
         }
 
         DS_Log(

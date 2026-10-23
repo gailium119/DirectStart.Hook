@@ -1,4 +1,4 @@
-﻿#include "StartMenuHooks.h"
+#include "StartMenuHooks.h"
 
 /*
  * Windows 8.1 Start Menu Revival 0.1.8 - standalone d3d11.dll build.
@@ -510,6 +510,17 @@ extern "C" BOOL DirectStartStartMenuInit()
     DS_FreeStringSetting(pszThemePath);
 
     BOOL ok = TRUE;
+
+    // DUI70 first: the twinui tile hook applies "StartMenu" to the system tile
+    // through DirectUI::Element::SetClass/GetChildren. If the menu is being
+    // built while injection happens (possible with a delay-loaded d3d11.dll),
+    // those pointers must already be available or the user tile keeps its
+    // default, too-large font.
+    if (!InitializeDUI70Hooks())
+    {
+        DS_Log(L"DUI70 hooks failed.");
+        ok = FALSE;
+    }
     if (!InitializeTWinUIHooks())
     {
         DS_Log(L"TWinUI hooks failed.");
@@ -520,10 +531,21 @@ extern "C" BOOL DirectStartStartMenuInit()
         DS_Log(L"Explorer hooks failed.");
         ok = FALSE;
     }
-    if (!InitializeDUI70Hooks())
+
+    // If the start menu was already constructed before the hooks were live,
+    // ask the tray hook to recreate it so the user tile gets styled too.
+    if (ok)
     {
-        DS_Log(L"DUI70 hooks failed.");
-        ok = FALSE;
+        if (HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr))
+        {
+            if (FindWindowW(L"DV2ControlHost", nullptr))
+            {
+                DS_Log(
+                    L"Start menu already built (styled=%ld); requesting rebuild.",
+                    g_systemTileStyled);
+                PostMessageW(tray, 0x40D, 1, 0);
+            }
+        }
     }
 
     DS_Log(L"DirectStart start-menu hooks: init finished, result=%d", ok);

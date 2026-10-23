@@ -168,6 +168,8 @@ HRESULT __thiscall Hook_CDUIResourceManager_CreateElement(
     return hr;
 }
 
+volatile LONG g_systemTileStyled = 0;
+
 HRESULT __fastcall Hook_CImmersiveSystemTile__Initialize(void* pThis)
 {
     DS_Log(L"CImmersiveSystemTile::_Initialize: Hook triggered for instance = %p, thread = %lu",
@@ -206,6 +208,10 @@ HRESULT __fastcall Hook_CImmersiveSystemTile__Initialize(void* pThis)
            hrClass, elementCount);
 
     g_pSystemTileRootElement = nullptr;
+    if (SUCCEEDED(hrClass))
+    {
+        InterlockedExchange(&g_systemTileStyled, 1);
+    }
     return hr;
 }
 

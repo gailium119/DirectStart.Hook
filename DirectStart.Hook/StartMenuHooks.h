@@ -85,6 +85,7 @@ extern IUnknown* g_gridBrowserUnk;
 
 extern ULONGLONG g_lastMenuCloseTick;
 extern DWORD g_pearlGateTls;
+extern volatile LONG g_systemTileStyled;
 
 extern Element_SetClass_t pfnElement_SetClass;
 extern Element_GetChildren_t pfnElement_GetChildren;
