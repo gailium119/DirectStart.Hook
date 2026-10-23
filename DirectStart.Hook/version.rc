@@ -1,4 +1,4 @@
-#include <windows.h>
+﻿#include <windows.h>
 
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION 1,0,0,0
@@ -18,12 +18,12 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "CompanyName", "DirectStart"
-            VALUE "FileDescription", "Windows 8.1 Start Menu Revival (winmm proxy)"
+            VALUE "FileDescription", "Windows 8.1 Start Menu Revival (d3d11 proxy)"
             VALUE "FileVersion", "1.0.0.0"
-            VALUE "InternalName", "winmm"
+            VALUE "InternalName", "d3d11"
             VALUE "LegalCopyright", "GPL-2.0; based on ExplorerPatcher by valinet and the Windows 8.1 Start Menu Revival mod"
-            VALUE "OriginalFilename", "winmm.dll"
-            VALUE "ProductName", "DirectStart WinMM Hook"
+            VALUE "OriginalFilename", "d3d11.dll"
+            VALUE "ProductName", "DirectStart D3D11 Hook"
             VALUE "ProductVersion", "1.0.0.0"
         END
     END

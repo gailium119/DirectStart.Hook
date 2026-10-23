@@ -1,7 +1,7 @@
 /*
- * DirectStart.Hook - Windows 8.1 start-menu restoration via winmm.dll proxy.
+ * DirectStart.Hook - Windows 8.1 start-menu restoration via d3d11.dll proxy.
  *
- * The proxy/injection model (a name-forwarding winmm.dll placed in C:\Windows,
+ * The proxy/injection model (a name-forwarding d3d11.dll placed in C:\Windows,
  * loaded by explorer.exe) is adapted from early ExplorerPatcher source by
  * valinet:
  * https://github.com/valinet/ExplorerPatcher
@@ -24,7 +24,7 @@
 #include <string>
 
 #include "DirectStart.h"
-#include "WinMMProxy.h"
+#include "D3D11Proxy.h"
 
 // Provided by StartMenuHooks.cpp.
 extern "C" BOOL DirectStartStartMenuInit();
@@ -38,14 +38,14 @@ extern "C" BOOL DirectStartStartMenuInit();
 #pragma comment(lib, "User32.lib")
 #pragma comment(lib, "Winhttp.lib")
 
-extern "C" void* g_winmm_procs[kWinMMExportCount] = {};
+extern "C" void* g_d3d11_procs[kD3D11ExportCount] = {};
 
 namespace
 {
     HMODULE g_module = nullptr;
     volatile LONG g_workerStarted = 0;
     volatile LONG g_proxyResolved = 0;
-    INIT_ONCE g_winmm_once = INIT_ONCE_STATIC_INIT;
+    INIT_ONCE g_d3d11_once = INIT_ONCE_STATIC_INIT;
 
     bool EqualsIgnoreCase(const wchar_t* left, const wchar_t* right)
     {
@@ -106,7 +106,7 @@ namespace
         return version.dwMajorVersion == 6 && version.dwMinorVersion == 3;
     }
 
-    BOOL CALLBACK InitializeSystemWinMM(PINIT_ONCE, PVOID, PVOID*)
+    BOOL CALLBACK InitializeSystemD3D11(PINIT_ONCE, PVOID, PVOID*)
     {
         wchar_t systemDirectory[MAX_PATH] = {};
         if (!GetSystemDirectoryW(
@@ -115,31 +115,31 @@ namespace
             return FALSE;
         }
 
-        const std::wstring systemWinMM =
-            std::wstring(systemDirectory) + L"\\winmm.dll";
+        const std::wstring systemD3D11 =
+            std::wstring(systemDirectory) + L"\\d3d11.dll";
 
         // The loader keys modules by full path, so this returns the real
-        // System32 winmm even though this module is also named winmm.dll.
+        // System32 d3d11 even though this module is also named d3d11.dll.
         HMODULE module = LoadLibraryExW(
-            systemWinMM.c_str(), nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            systemD3D11.c_str(), nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
         if (!module || module == g_module)
         {
             return FALSE;
         }
 
         LONG resolved = 0;
-        for (size_t index = 0; index < kWinMMExportCount; ++index)
+        for (size_t index = 0; index < kD3D11ExportCount; ++index)
         {
-            g_winmm_procs[index] = reinterpret_cast<void*>(
-                GetProcAddress(module, kWinMMExportNames[index]));
-            if (g_winmm_procs[index])
+            g_d3d11_procs[index] = reinterpret_cast<void*>(
+                GetProcAddress(module, kD3D11ExportNames[index]));
+            if (g_d3d11_procs[index])
             {
                 ++resolved;
             }
         }
         g_proxyResolved = resolved;
 
-        return resolved == static_cast<LONG>(kWinMMExportCount);
+        return resolved == static_cast<LONG>(kD3D11ExportCount);
     }
 
     DWORD WINAPI HookWorker(LPVOID)
@@ -148,10 +148,8 @@ namespace
         DS_SetLogEnabled(TRUE);
 
         DS_Log(
-            L"DirectStart winmm proxy starting: module=%p real-winmm-exports=%ld/%llu",
-            g_module,
-            g_proxyResolved,
-            static_cast<unsigned long long>(kWinMMExportCount));
+            L"DirectStart d3d11 proxy starting: module=%p proxy=lazy (first exported call loads System32 d3d11)",
+            g_module);
 
         if (!IsExplorerProcess())
         {
@@ -174,6 +172,14 @@ namespace
     }
 }
 
+// Called from D3D11Proxy_Dispatch (D3D11ProxyDispatch.asm) on the first call
+// to any exported function. RCX contains the export index.
+extern "C" void D3D11Proxy_Resolve(UINT_PTR)
+{
+    InitOnceExecuteOnce(
+        &g_d3d11_once, InitializeSystemD3D11, nullptr, nullptr);
+}
+
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID)
 {
     if (reason == DLL_PROCESS_ATTACH)
@@ -181,12 +187,9 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID)
         g_module = instance;
         DisableThreadLibraryCalls(instance);
 
-        // Every proxy export is a tail jump through g_winmm_procs, so the real
-        // winmm has to be resolved before explorer can call into us. Loading a
-        // System32 DLL here only takes the loader lock briefly and does not
-        // call back into this module.
-        InitOnceExecuteOnce(
-            &g_winmm_once, InitializeSystemWinMM, nullptr, nullptr);
+        // The real d3d11 is loaded lazily from D3D11Proxy_Dispatch on the first
+        // exported call, not here: d3d11's own DllMain must not run under our
+        // loader lock.
 
         if (!IsExplorerProcess())
         {

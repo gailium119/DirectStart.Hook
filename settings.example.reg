@@ -6,9 +6,9 @@ Windows Registry Editor Version 5.00
 [HKEY_CURRENT_USER\Software\DirectStart\StartMenu]
 "enabled"=dword:00000001
 "log"=dword:00000000
-"theme"=""
-"muipath"=""
-"twinui_muipath"=""
+"theme"="C:\\ProgramData\\DirectStart\\aero.msstyles"
+"muipath"="C:\\ProgramData\\DirectStart\\explorer.exe.mui"
+"twinui_muipath"="C:\\ProgramData\\DirectStart\\twinui.dll.mui"
 "theme_debug"=dword:00000000
 
 ; Optional: directory for the downloaded PDB files. They are stored flat, e.g.

@@ -1,5 +1,5 @@
-/*
- * DirectStart - runtime for the standalone Windows 8.1 start-menu winmm proxy.
+﻿/*
+ * DirectStart - runtime for the standalone Windows 8.1 start-menu d3d11 proxy.
  *
  * Uses:
  *   - libvalinet valinet/pdb/pdb.h   PDB download + symbol lookup

@@ -4,3 +4,7 @@
 [submodule "third_party/minhook"]
 	path = third_party/minhook
 	url = https://github.com/TsudaKageyu/minhook.git
+[submodule "third_party/ExplorerPatcher"]
+	path = third_party/ExplorerPatcher
+	url = https://github.com/valinet/ExplorerPatcher.git
+	branch = Backports_22000_675_45

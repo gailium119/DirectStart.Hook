@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -47,7 +47,7 @@
   <PropertyGroup>
     <OutDir>$(MSBuildThisFileDirectory)..\build\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(MSBuildThisFileDirectory)..\obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <TargetName>winmm</TargetName>
+    <TargetName>d3d11</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -62,7 +62,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <ModuleDefinitionFile>winmm.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>d3d11.def</ModuleDefinitionFile>
       <AdditionalDependencies>DbgHelp.lib;Winhttp.lib;Wininet.lib;Shell32.lib;Advapi32.lib;User32.lib;Ole32.lib;Dwmapi.lib;Shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -83,13 +83,18 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <ModuleDefinitionFile>winmm.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>d3d11.def</ModuleDefinitionFile>
       <AdditionalDependencies>DbgHelp.lib;Winhttp.lib;Wininet.lib;Shell32.lib;Advapi32.lib;User32.lib;Ole32.lib;Dwmapi.lib;Shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />
-    <ClCompile Include="StartMenuHooks.cpp" />
+    <ClCompile Include="StartMenu.cpp" />
+    <ClCompile Include="StartMenuTwinUI.cpp" />
+    <ClCompile Include="StartMenuExplorer.cpp" />
+    <ClCompile Include="StartMenuPearl.cpp" />
+    <ClCompile Include="StartMenuDui.cpp" />
+    <ClCompile Include="StartMenuDiagnostics.cpp" />
     <ClCompile Include="DirectStart.cpp" />
     <ClCompile Include="..\third_party\minhook\src\buffer.c" />
     <ClCompile Include="..\third_party\minhook\src\hook.c" />
@@ -98,18 +103,21 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DirectStart.h" />
-    <ClInclude Include="WinMMProxy.h" />
+    <ClInclude Include="StartMenuHooks.h" />
+    <ClInclude Include="PatternScan.h" />
+    <ClInclude Include="D3D11Proxy.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="version.rc" />
   </ItemGroup>
   <ItemGroup>
-    <MASM Include="WinMMProxy.asm" />
+    <MASM Include="D3D11Proxy.asm" />
+    <MASM Include="D3D11ProxyDispatch.asm" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="generate_winmm_proxy.ps1" />
-    <None Include="winmm.def" />
+    <None Include="generate_proxy.ps1" />
+    <None Include="d3d11.def" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

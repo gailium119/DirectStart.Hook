@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 setlocal
 cd /d "%~dp0"
 
@@ -10,11 +10,11 @@ goto build
 where git >nul 2>nul
 if errorlevel 1 (
     echo git was not found. Install Git and run:
-    echo   git submodule update --init --recursive
+    echo   git submodule update --init
     exit /b 1
 )
 echo Initializing git submodules...
-git submodule update --init --recursive
+git submodule update --init
 if errorlevel 1 exit /b 1
 
 :build
@@ -34,4 +34,4 @@ if not defined MSBUILD (
 if errorlevel 1 exit /b 1
 
 echo.
-echo Built: %~dp0build\x64\Release\winmm.dll
+echo Built: %~dp0build\x64\Release\d3d11.dll
