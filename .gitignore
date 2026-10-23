@@ -1,0 +1,10 @@
+# Build output
+/build/
+/obj/
+/.vs/
+*.user
+
+# Local scratch / test files
+/_test/
+/_libv/
+1.cmd

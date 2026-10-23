@@ -1,0 +1,6 @@
+[submodule "third_party/libvalinet"]
+	path = third_party/libvalinet
+	url = https://github.com/valinet/libvalinet.git
+[submodule "third_party/minhook"]
+	path = third_party/minhook
+	url = https://github.com/TsudaKageyu/minhook.git

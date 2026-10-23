@@ -1,0 +1,9 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64">
+      <Configuration Name="Debug" />
+      <Configuration Name="Release" />
+    </Platform>
+  </Configurations>
+  <Project Path="DirectStart.Hook/DirectStart.Hook.vcxproj" />
+</Solution>

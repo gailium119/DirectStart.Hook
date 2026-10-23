@@ -1,0 +1,19 @@
+Windows Registry Editor Version 5.00
+
+; Windows 8.1 Start Menu Revival (winmm.dll)
+; Import, then restart explorer.exe.
+
+[HKEY_CURRENT_USER\Software\DirectStart\StartMenu]
+"enabled"=dword:00000001
+"log"=dword:00000000
+"theme"=""
+"muipath"=""
+"twinui_muipath"=""
+"theme_debug"=dword:00000000
+
+; Optional: directory for the downloaded PDB files. They are stored flat, e.g.
+; <dir>\explorer.pdb, <dir>\twinui.pdb, <dir>\dui70.pdb.
+; "symbols"="D:\\Symbols"
+
+; Optional: DirectStart.ini location (function address cache/overrides).
+; "ini"="D:\\DirectStart.ini"
