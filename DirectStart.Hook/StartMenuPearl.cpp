@@ -1,4 +1,4 @@
-﻿#include "StartMenuHooks.h"
+#include "StartMenuHooks.h"
 
 // crappy impl for pearl coloring on menu open
 
@@ -46,6 +46,48 @@ static bool IsHighContrastActive()
            (hc.dwFlags & HCF_HIGHCONTRASTON);
 }
 
+// The pearl pressed layer uses 0xFFFF00FF (pure magenta) as a "no color"
+// placeholder on several 8.1 themes. Returning it makes the start button flash
+// purple while pressed. Treat that sentinel (and fully transparent values) as
+// invalid and derive the real accent color instead.
+static bool IsInvalidPearlColor(DWORD color)
+{
+    return color == 0 ||
+        (color & 0x00FFFFFFu) == 0x00FF00FFu ||
+        (color >> 24) == 0;
+}
+
+static DWORD ColorRefToArgb(COLORREF color)
+{
+    return 0xFF000000u |
+        (static_cast<DWORD>(GetRValue(color)) << 16) |
+        (static_cast<DWORD>(GetGValue(color)) << 8) |
+        static_cast<DWORD>(GetBValue(color));
+}
+
+static int PearlColorDistance(DWORD left, DWORD right)
+{
+    const int dr = abs(static_cast<int>((left >> 16) & 0xFF) -
+                       static_cast<int>((right >> 16) & 0xFF));
+    const int dg = abs(static_cast<int>((left >> 8) & 0xFF) -
+                       static_cast<int>((right >> 8) & 0xFF));
+    const int db = abs(static_cast<int>(left & 0xFF) -
+                       static_cast<int>(right & 0xFF));
+    return dr > dg ? (dr > db ? dr : db) : (dg > db ? dg : db);
+}
+
+static DWORD GetSystemAccentColor()
+{
+    DWORD colorization = 0;
+    BOOL opaque = FALSE;
+    if (SUCCEEDED(DwmGetColorizationColor(&colorization, &opaque)) &&
+        !IsInvalidPearlColor(colorization))
+    {
+        return colorization;
+    }
+    return ColorRefToArgb(GetSysColor(COLOR_HIGHLIGHT));
+}
+
 static DWORD GetRTStartMenuColor()
 {
     DWORD value = 0;
@@ -54,14 +96,18 @@ static DWORD GetRTStartMenuColor()
     if (SHGetValueW(HKEY_LOCAL_MACHINE,
                     L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartMenu\\Colors",
                     L"OverrideColor", &type, &value, &cb) == ERROR_SUCCESS &&
-        type == REG_DWORD && cb == sizeof(value))
+        type == REG_DWORD && cb == sizeof(value) &&
+        !IsInvalidPearlColor(value))
     {
         return value;
     }
     if (IsHighContrastActive())
-        return GetSysColor(COLOR_WINDOW);
-    return pOriginalImmersiveColor_GetColor ? pOriginalImmersiveColor_GetColor(0)
-                                            : 0xFF000000;
+        return ColorRefToArgb(GetSysColor(COLOR_WINDOW));
+
+    const DWORD original = pOriginalImmersiveColor_GetColor
+        ? pOriginalImmersiveColor_GetColor(0)
+        : 0;
+    return IsInvalidPearlColor(original) ? GetSystemAccentColor() : original;
 }
 
 DWORD __fastcall Hook_ImmersiveColor_GetColor(int type)
@@ -136,7 +182,22 @@ HRESULT __fastcall Hook_Pearl_LoadColorizedImage(
             if (PearlLookupLayer3(pData, &l3))
             {
                 const DWORD before = static_cast<DWORD>(pData->f[7]);
-                const DWORD after = (before & 0x00FF0000u) | (l3 & 0xFF00FFFFu);
+                DWORD after = (before & 0x00FF0000u) | (l3 & 0xFF00FFFFu);
+                if (IsInvalidPearlColor(before) ||
+                    IsInvalidPearlColor(l3) ||
+                    IsInvalidPearlColor(after) ||
+                    PearlColorDistance(after, l3) > 0x60)
+                {
+                    // Do not let the channel merge turn the pressed pearl
+                    // magenta/pink or otherwise diverge wildly from the normal
+                    // layer color; keep the normal accent in that case.
+                    if (!IsInvalidPearlColor(l3))
+                        after = l3;
+                    else if (!IsInvalidPearlColor(before))
+                        after = before;
+                    else
+                        after = GetSystemAccentColor();
+                }
                 pData->f[7] = static_cast<int>(after);
                 static LONG s_logged = 0;
                 if (InterlockedIncrement(&s_logged) <= 8)
