@@ -145,14 +145,18 @@ void __fastcall Hook_Pearl_UpdateLayerVisibility(void* pThis)
             reinterpret_cast<char*>(pThis) + 0x7C);
         if (state == 1)
         {
-            // Hover uses the press logo layer; the hover-selected layer kept
-            // producing a green/colored frame around the transparent center.
+            // Hover should be the blue glyph only. The baseplate/colorization
+            // layers were drawing the blue square around the transparent logo
+            // center, and HOVERSELECTED added the extra frame.
+            layers[0x00] = 0; // PVL_BASEPLATE
+            layers[0x24] = 0; // PVL_COLORIZATION
+            layers[0x48] = 0; // PVL_WASH
             layers[0x90] = 0; // PVL_HOVERSELECTED
             layers[0xB4] = 1; // PVL_PRESS
             static LONG s_hoverFixed = 0;
             if (InterlockedIncrement(&s_hoverFixed) <= 8)
             {
-                DS_Log(L"Pearl RT: vis hover uses press layer");
+                DS_Log(L"Pearl RT: vis hover logo-only");
             }
         }
     }
