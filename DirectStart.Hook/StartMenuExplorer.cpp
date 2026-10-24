@@ -167,9 +167,36 @@ static HWND FindVisibleAllAppsList(HWND parent)
     return nullptr;
 }
 
-bool ForwardMenuWheel(WPARAM wParam, LPARAM lParam)
+static HWND FindMenuHostFromWindow(HWND hwnd)
 {
-    HWND host = FindWindowW(L"DV2ControlHost", nullptr);
+    for (HWND current = hwnd; current; current = GetParent(current))
+    {
+        wchar_t className[64] = {};
+        if (GetClassNameW(current, className, _countof(className)) &&
+            wcscmp(className, L"DV2ControlHost") == 0)
+        {
+            return current;
+        }
+    }
+    return nullptr;
+}
+
+bool ForwardMenuWheel(WPARAM wParam, LPARAM lParam, HWND source)
+{
+    HWND host = FindMenuHostFromWindow(source);
+    if (!host)
+    {
+        host = FindWindowW(L"DV2ControlHost", nullptr);
+    }
+
+    static LONG s_enterLogged = 0;
+    if (InterlockedIncrement(&s_enterLogged) <= 20)
+    {
+        DS_Log(
+            L"ForwardMenuWheel source=%p host=%p",
+            source,
+            host);
+    }
 
     if (host && g_pDeskHost && pfnCDesktopHost_IsDialogMessage)
     {
@@ -238,7 +265,7 @@ static LRESULT CALLBACK MenuWheelSubclass(
     DWORD_PTR)
 {
     if (uMsg == WM_MOUSEWHEEL && IsStartMenuEnabled() &&
-        ForwardMenuWheel(wParam, lParam))
+        ForwardMenuWheel(wParam, lParam, hwnd))
     {
         return 0;
     }
@@ -262,7 +289,7 @@ static LRESULT CALLBACK WheelGetMessageProc(int code, WPARAM wParam, LPARAM lPar
             }
             HWND host = FindWindowW(L"DV2ControlHost", nullptr);
             if (host && IsWindowVisible(host) &&
-                ForwardMenuWheel(msg->wParam, msg->lParam))
+                ForwardMenuWheel(msg->wParam, msg->lParam, msg->hwnd))
             {
                 msg->message = WM_NULL;
             }
@@ -283,7 +310,7 @@ static LRESULT CALLBACK WheelCallWndProc(int code, WPARAM wParam, LPARAM lParam)
             {
                 DS_Log(L"CallWnd wheel hwnd=%p", cwp->hwnd);
             }
-            ForwardMenuWheel(cwp->wParam, cwp->lParam);
+            ForwardMenuWheel(cwp->wParam, cwp->lParam, cwp->hwnd);
         }
     }
     return CallNextHookEx(g_wheelCallWndHook, code, wParam, lParam);
@@ -483,7 +510,7 @@ LRESULT __fastcall Hook_CTray_v_WndProc(void* pThis, HWND hWnd, UINT uMsg, WPARA
 {
     if (IsStartMenuEnabled())
     {
-        if (uMsg == WM_MOUSEWHEEL && ForwardMenuWheel(wParam, lParam))
+        if (uMsg == WM_MOUSEWHEEL && ForwardMenuWheel(wParam, lParam, hWnd))
         {
             return 0;
         }
