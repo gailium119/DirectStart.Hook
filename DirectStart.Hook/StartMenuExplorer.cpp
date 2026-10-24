@@ -48,6 +48,11 @@ typedef HRESULT (__fastcall *CDesktopHost_AcquireSearchServices_t)(
 );
 CDesktopHost_AcquireSearchServices_t pOriginalCDesktopHost_AcquireSearchServices = nullptr;
 
+typedef int (__fastcall *CDesktopHost_FilterMouseWheel_t)(
+    void* pThis, MSG* msg, HWND hwnd);
+CDesktopHost_FilterMouseWheel_t pfnCDesktopHost_FilterMouseWheel = nullptr;
+static void* g_pDeskHost = nullptr;
+
 BOOL __fastcall Hook_CDesktopHost__AddWin32Controls(void* pThis)
 {
     int mode = pThis ? *reinterpret_cast<int*>((char*)pThis + 0x184) : -1;
@@ -165,8 +170,41 @@ static HWND FindVisibleAllAppsList(HWND parent)
 
 bool ForwardMenuWheel(WPARAM wParam, LPARAM lParam)
 {
-    (void)lParam;
     HWND host = FindWindowW(L"DV2ControlHost", nullptr);
+
+    if (g_pDeskHost && pfnCDesktopHost_FilterMouseWheel)
+    {
+        const POINT point = {
+            static_cast<SHORT>(LOWORD(lParam)),
+            static_cast<SHORT>(HIWORD(lParam))};
+        HWND target = WindowFromPoint(point);
+        if (!target || (host && !IsChild(host, target) && target != host))
+        {
+            target = host;
+        }
+        if (target)
+        {
+            MSG msg = {};
+            msg.hwnd = target;
+            msg.message = WM_MOUSEWHEEL;
+            msg.wParam = wParam;
+            msg.lParam = lParam;
+            const int handled =
+                pfnCDesktopHost_FilterMouseWheel(g_pDeskHost, &msg, target);
+            if (handled)
+            {
+                static LONG s_nativeLogged = 0;
+                if (InterlockedIncrement(&s_nativeLogged) <= 20)
+                {
+                    DS_Log(
+                        L"Start menu wheel handled by CDesktopHost::_FilterMouseWheel hwnd=%p",
+                        target);
+                }
+                return true;
+            }
+        }
+    }
+
     HWND list = host ? FindVisibleAllAppsList(host) : nullptr;
     if (!list)
     {
@@ -310,6 +348,7 @@ void __fastcall Hook_CPearl_BuildStartMenu(void* pThis)
         
         if (SUCCEEDED(hrCreate) && pDeskHost)
         {
+            g_pDeskHost = pDeskHost;
             if (pOutMenuPopup)
             {
                 void** pVtblSurface = *(void***)pOutMenuPopup;
@@ -434,6 +473,7 @@ void __fastcall Hook_CPearl_CloseStartMenu(void* pThis)
 void __fastcall Hook_CPearl_DestroyStartMenu(void* pThis)
 { 
     PearlSetMenuOpen(pThis, false);
+    g_pDeskHost = nullptr;
     pOriginalCPearl_DestroyStartMenu(pThis);
 }
 
@@ -641,6 +681,10 @@ BOOL InitializeExplorerHooks()
         { 
             { L"private: long __cdecl CDesktopHost::_AcquireSearchServices(struct _GUID const &,void * *)" },
             &pOriginalCDesktopHost_AcquireSearchServices, Hook_CDesktopHost_AcquireSearchServices, false
+        },
+        {
+            { L"private: int __cdecl CDesktopHost::_FilterMouseWheel(struct tagMSG *,struct HWND__ *)" },
+            &pfnCDesktopHost_FilterMouseWheel, nullptr, true
         },
         {
             { L"public: virtual long __cdecl CStartMenuGridPane::CreatePane(int,int,int,int,int,struct HWND__ *)" },
