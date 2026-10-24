@@ -17,7 +17,6 @@
 
 DWORD g_pearlGateTls = TLS_OUT_OF_INDEXES;
 ULONGLONG g_lastMenuCloseTick = 0;
-static thread_local bool g_inLogoColorize = false;
 
 static_assert(sizeof(PearlLayerRenderData) == 36, "PEARL_LAYER_RENDER_DATA size");
 
@@ -50,13 +49,6 @@ static DWORD GetRTStartMenuColor()
 
 DWORD __fastcall Hook_ImmersiveColor_GetColor(int type)
 {
-    if (g_inLogoColorize)
-    {
-        // The logo bitmap is the only visible part of the button now; color it
-        // with the fixed dark purple instead of the per-state theme colors.
-        return PEARL_DEFAULT_COLOR;
-    }
-
     DWORD result = pOriginalImmersiveColor_GetColor(type);
     if (type == PEARL_RT_COLOR_TYPE_START && IsStartMenuEnabled())
     {
@@ -98,14 +90,7 @@ HRESULT __fastcall Hook_Pearl_LoadColorizedImage(
         }
     }
 
-    const bool logo = pData && IsStartMenuEnabled() &&
-        pData->renderMode == 1 && pData->resId == PEARL_LOGO_RES_ID;
-    const bool previous = g_inLogoColorize;
-    g_inLogoColorize = logo;
-    const HRESULT hr =
-        pOriginalPearl_LoadColorizedImage(pData, fFlag, phbmp);
-    g_inLogoColorize = previous;
-    return hr;
+    return pOriginalPearl_LoadColorizedImage(pData, fFlag, phbmp);
 }
 
 typedef HRESULT (__fastcall *Pearl_RepaintInternal_t)(
@@ -128,14 +113,7 @@ HRESULT __fastcall Hook_Pearl_RepaintInternal(
                layer->clrDesired);
     }
 
-    const bool logo = layer && IsStartMenuEnabled() &&
-        layer->renderMode == 1 && layer->resId == PEARL_LOGO_RES_ID;
-    const bool previous = g_inLogoColorize;
-    g_inLogoColorize = logo;
-    const HRESULT hr =
-        pOriginalPearl_RepaintInternal(pThis, hdc, target, pData);
-    g_inLogoColorize = previous;
-    return hr;
+    return pOriginalPearl_RepaintInternal(pThis, hdc, target, pData);
 }
 
 typedef void (__fastcall *Pearl_UpdateLayerVisibility_t)(void* pThis);
@@ -144,23 +122,6 @@ Pearl_UpdateLayerVisibility_t pOriginalPearl_UpdateLayerVisibility = nullptr;
 void __fastcall Hook_Pearl_UpdateLayerVisibility(void* pThis)
 {
     pOriginalPearl_UpdateLayerVisibility(pThis);
-
-    if (pThis && IsStartMenuEnabled())
-    {
-        // The desired start button is just the purple Windows glyph on the
-        // taskbar. Hide the baseplate/colorization/wash square layers and keep
-        // the rest/hover/press logo layers.
-        BYTE* layers = reinterpret_cast<BYTE*>(
-            reinterpret_cast<char*>(pThis) + 0x7C);
-        layers[0x00] = 0; // PVL_BASEPLATE
-        layers[0x24] = 0; // PVL_COLORIZATION
-        layers[0x48] = 0; // PVL_WASH
-        static LONG s_forced = 0;
-        if (InterlockedIncrement(&s_forced) <= 8)
-        {
-            DS_Log(L"Pearl RT: vis forced logo-only");
-        }
-    }
 
     static LONG s_logged = 0;
     if (pThis && InterlockedIncrement(&s_logged) <= 16)
