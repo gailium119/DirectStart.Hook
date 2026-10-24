@@ -250,6 +250,11 @@ bool ForwardMenuWheel(WPARAM wParam, LPARAM lParam, HWND source)
         static_cast<SHORT>(HIWORD(lParam))};
     HWND underCursor = WindowFromPoint(point);
     HWND pointList = FindListAncestor(underCursor);
+    HWND cursorHost = FindMenuHostFromWindow(underCursor);
+    if (cursorHost)
+    {
+        host = cursorHost;
+    }
     HWND hostList = host ? FindVisibleAllAppsList(host) : nullptr;
     wchar_t underClass[64] = {};
     if (underCursor)
@@ -260,15 +265,33 @@ bool ForwardMenuWheel(WPARAM wParam, LPARAM lParam, HWND source)
     if (InterlockedIncrement(&s_listLogged) <= 20)
     {
         DS_Log(
-            L"wheel cursor=%p class=%s pointList=%p hostList=%p",
+            L"wheel cursor=%p class=%s cursorHost=%p pointList=%p hostList=%p",
             underCursor,
             underClass,
+            cursorHost,
             pointList,
             hostList);
     }
 
+    if (hostList && ScrollSysListView(hostList, delta))
+    {
+        return true;
+    }
     if (pointList && ScrollSysListView(pointList, delta))
     {
+        return true;
+    }
+
+    if (wcscmp(underClass, L"SysTreeView32") == 0 && delta != 0)
+    {
+        const WPARAM scroll =
+            MAKEWPARAM(delta > 0 ? SB_LINEUP : SB_LINEDOWN, 0);
+        const int lines = (abs(delta) / WHEEL_DELTA) * 3;
+        for (int i = 0; i < lines; ++i)
+        {
+            SendMessageW(underCursor, WM_VSCROLL, scroll, 0);
+        }
+        DS_Log(L"Start menu wheel -> tree=%p delta=%d", underCursor, delta);
         return true;
     }
 
