@@ -23,16 +23,6 @@ struct PearlGateScope
     }
 };
 
-static bool InPearlGate()
-{
-    if (g_pearlGateTls == TLS_OUT_OF_INDEXES)
-        return false;
-    const DWORD err = GetLastError();
-    const bool in = TlsGetValue(g_pearlGateTls) != nullptr;
-    SetLastError(err);
-    return in;
-}
-
 static_assert(sizeof(PearlLayerRenderData) == 36, "PEARL_LAYER_RENDER_DATA size");
 
 typedef DWORD (__fastcall *ImmersiveColor_GetColor_t)(int type);
@@ -66,10 +56,10 @@ static DWORD GetRTStartMenuColor()
 
 DWORD __fastcall Hook_ImmersiveColor_GetColor(int type)
 {
-    if (type == PEARL_RT_COLOR_TYPE_START && IsStartMenuEnabled() && InPearlGate())
-    {
-        return GetRTStartMenuColor();
-    }
+    // Do not override the immersive color globally. The same color type (282)
+    // is also queried for the start-button logo, so replacing it here also
+    // tinted the white Windows glyph. The pearl layer color is handled in
+    // Hook_Pearl_LoadColorizedImage instead.
     return pOriginalImmersiveColor_GetColor(type);
 }
 
@@ -188,6 +178,7 @@ HRESULT __fastcall Hook_Pearl_LoadColorizedImage(
             }
         }
     }
+
     PearlGateScope gate;
     return pOriginalPearl_LoadColorizedImage(pData, fFlag, phbmp);
 }
