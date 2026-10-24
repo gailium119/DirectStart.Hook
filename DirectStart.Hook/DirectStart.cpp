@@ -812,6 +812,37 @@ namespace
         return true;
     }
 
+    bool IsValidPdbFile(const std::wstring& path)
+    {
+        HANDLE file = CreateFileW(
+            path.c_str(),
+            GENERIC_READ,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            nullptr,
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL,
+            nullptr);
+        if (file == INVALID_HANDLE_VALUE)
+        {
+            return false;
+        }
+
+        LARGE_INTEGER size = {};
+        const bool sized = GetFileSizeEx(file, &size) != FALSE;
+        char header[32] = {};
+        DWORD read = 0;
+        const bool readOk =
+            ReadFile(file, header, sizeof(header), &read, nullptr) != FALSE;
+        CloseHandle(file);
+
+        static const char kMagic[] =
+            "Microsoft C/C++ MSF 7.00\r\n\x1a" "DS";
+        const DWORD magicLength = static_cast<DWORD>(sizeof(kMagic) - 1);
+        return sized && size.QuadPart >= 0x1000 && readOk &&
+            read >= magicLength &&
+            memcmp(header, kMagic, magicLength) == 0;
+    }
+
     std::wstring EnsurePdb(HMODULE module, bool forceDownload = false)
     {
         static std::unordered_map<HMODULE, std::wstring> cache;
@@ -846,8 +877,16 @@ namespace
 
         const std::wstring pdbPath =
             directory + L"\\" + moduleName + L".pdb";
-        const bool exists =
+        bool exists =
             GetFileAttributesW(pdbPath.c_str()) != INVALID_FILE_ATTRIBUTES;
+        if (exists && !IsValidPdbFile(pdbPath))
+        {
+            DS_Log(
+                L"Symbols: local PDB is invalid/truncated, deleting %s",
+                pdbPath.c_str());
+            DeleteFileW(pdbPath.c_str());
+            exists = false;
+        }
 
         // Local-first: use an existing PDB even if it is older than the module.
         // Only re-download when the caller says reading it failed.
