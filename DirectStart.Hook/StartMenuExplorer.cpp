@@ -1,6 +1,9 @@
 #include "StartMenuHooks.h"
+#include <commctrl.h>
 
 bool g_inGridPaneCreate = false;
+
+void InstallStartMenuWheelForwarding();
 
 typedef void (__fastcall *CPearl_DisplayStartMenu_t)(void* pThis);
 CPearl_DisplayStartMenu_t pOriginalCPearl_DisplayStartMenu = nullptr;
@@ -52,6 +55,7 @@ BOOL __fastcall Hook_CDesktopHost__AddWin32Controls(void* pThis)
 
     int result = pOriginalCDesktopHost__AddWin32Controls(pThis);
 
+    InstallStartMenuWheelForwarding();
     DS_Log(L"CDesktopHost::_AddWin32Controls: end result=%d", result);
     return result;
 }
@@ -95,6 +99,85 @@ HRESULT __fastcall Hook_CDesktopHost_AcquireSearchServices(
         pThis
     );
     return E_NOINTERFACE;
+}
+
+static HWND FindDescendantWindow(HWND parent, const wchar_t* wantedClass)
+{
+    HWND child = FindWindowExW(parent, nullptr, nullptr, nullptr);
+    while (child)
+    {
+        wchar_t className[64] = {};
+        if (GetClassNameW(child, className, _countof(className)) &&
+            wcscmp(className, wantedClass) == 0)
+        {
+            return child;
+        }
+        HWND found = FindDescendantWindow(child, wantedClass);
+        if (found)
+        {
+            return found;
+        }
+        child = FindWindowExW(parent, child, nullptr, nullptr);
+    }
+    return nullptr;
+}
+
+static LRESULT CALLBACK MenuWheelSubclass(
+    HWND hwnd,
+    UINT uMsg,
+    WPARAM wParam,
+    LPARAM lParam,
+    UINT_PTR,
+    DWORD_PTR)
+{
+    if (uMsg == WM_MOUSEWHEEL && IsStartMenuEnabled())
+    {
+        HWND host = FindWindowW(L"DV2ControlHost", nullptr);
+        HWND list = host
+            ? FindDescendantWindow(host, L"SysListView32")
+            : nullptr;
+        if (list && list != hwnd)
+        {
+            return SendMessageW(list, uMsg, wParam, lParam);
+        }
+
+        if (hwnd != list)
+        {
+            const POINT point = {
+                static_cast<SHORT>(LOWORD(lParam)),
+                static_cast<SHORT>(HIWORD(lParam))};
+            HWND target = WindowFromPoint(point);
+            if (target && target != hwnd &&
+                host && IsChild(host, target))
+            {
+                return SendMessageW(target, uMsg, wParam, lParam);
+            }
+        }
+    }
+    return DefSubclassProc(hwnd, uMsg, wParam, lParam);
+}
+
+static BOOL CALLBACK SubclassWheelWindow(HWND hwnd, LPARAM)
+{
+    SetWindowSubclass(hwnd, MenuWheelSubclass, 0xD15, 0);
+    return TRUE;
+}
+
+void InstallStartMenuWheelForwarding()
+{
+    HWND host = FindWindowW(L"DV2ControlHost", nullptr);
+    if (!host)
+    {
+        return;
+    }
+
+    SetWindowSubclass(host, MenuWheelSubclass, 0xD15, 0);
+    EnumChildWindows(host, SubclassWheelWindow, 0);
+    static LONG s_logged = 0;
+    if (InterlockedIncrement(&s_logged) <= 8)
+    {
+        DS_Log(L"Start menu wheel forwarding installed");
+    }
 }
 
 typedef HRESULT (__fastcall *DesktopV2_Build_t)(void* pDeskHost, DWORD dwFlags);
@@ -212,6 +295,7 @@ void __fastcall Hook_CPearl_DisplayStartMenu(void* pThis)
            pThis,
            pThis ? *reinterpret_cast<void**>((char*)pThis + 0xA0) : nullptr);
     pOriginalCPearl_DisplayStartMenu(pThis);
+    InstallStartMenuWheelForwarding();
     DumpStartMenuWindowTree(L"after DisplayStartMenu");
 }
 
