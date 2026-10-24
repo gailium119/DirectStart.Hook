@@ -14,9 +14,9 @@
 #define PEARL_RT_COLOR_TYPE_START 282
 // s_LoadOptionallyColorizedImage writes the color into a 32-bpp DIB as
 // B,G,R,A, so it consumes COLORREF (0x00BBGGRR). The repaint/fill path
-// consumes ARGB (0xAARRGGBB). Green is used for testing the channel order.
-#define PEARL_COLOR_BGR  0xFF00FF00u
-#define PEARL_COLOR_ARGB 0xFF00FF00u
+// consumes ARGB (0xAARRGGBB). Blue test: #0000FF.
+#define PEARL_COLOR_BGR  0x00FF0000u
+#define PEARL_COLOR_ARGB 0xFF0000FFu
 #define PEARL_LOGO_RES_ID 11703
 
 DWORD g_pearlGateTls = TLS_OUT_OF_INDEXES;
@@ -136,6 +136,26 @@ Pearl_UpdateLayerVisibility_t pOriginalPearl_UpdateLayerVisibility = nullptr;
 void __fastcall Hook_Pearl_UpdateLayerVisibility(void* pThis)
 {
     pOriginalPearl_UpdateLayerVisibility(pThis);
+
+    if (pThis && IsStartMenuEnabled())
+    {
+        const int state = *reinterpret_cast<int*>(
+            reinterpret_cast<char*>(pThis) + 0x1C);
+        BYTE* layers = reinterpret_cast<BYTE*>(
+            reinterpret_cast<char*>(pThis) + 0x7C);
+        if (state == 1)
+        {
+            // Hover uses the press logo layer; the hover-selected layer kept
+            // producing a green/colored frame around the transparent center.
+            layers[0x90] = 0; // PVL_HOVERSELECTED
+            layers[0xB4] = 1; // PVL_PRESS
+            static LONG s_hoverFixed = 0;
+            if (InterlockedIncrement(&s_hoverFixed) <= 8)
+            {
+                DS_Log(L"Pearl RT: vis hover uses press layer");
+            }
+        }
+    }
 
     static LONG s_logged = 0;
     if (pThis && InterlockedIncrement(&s_logged) <= 16)
