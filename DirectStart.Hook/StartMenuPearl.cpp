@@ -269,6 +269,18 @@ void __fastcall Hook_CPearl_OnStartMenuShownOnPearl(void* pThis, bool fOpen, HWN
     if (InterlockedIncrement(&s_logged) <= 40)
         DS_Log(L"Pearl RT: OnStartMenuShownOnPearl(%d) pearl=%p", fOpen ? 1 : 0, pThis);
 
+    // Rebuild the white rest resources after the menu/pearl has settled back
+    // to state 0; doing it from _UpdateState was still too early for the
+    // cached hover surface.
+    if (pThis && !fOpen && IsStartMenuEnabled() && g_pearlState == 0 &&
+        !g_inThemeRefresh && pOriginalCPearl_UpdateTheme)
+    {
+        g_inThemeRefresh = true;
+        DS_Log(L"Pearl RT: refreshing rest resources after menu close");
+        pOriginalCPearl_UpdateTheme(pThis);
+        g_inThemeRefresh = false;
+    }
+
     pOriginalCPearl_OnStartMenuShownOnPearl(pThis, fOpen, pphwnd);
 }
 
