@@ -12,11 +12,14 @@
  */
 
 #define PEARL_RT_COLOR_TYPE_START 282
-#define PEARL_DEFAULT_COLOR 0xFF4B0082u  // dark purple / indigo
+// Pearl colors are consumed in COLORREF byte order (R in the low byte):
+// 0x00BBGGRR. This value is #4B0082 (dark purple/indigo).
+#define PEARL_DEFAULT_COLOR 0xFF82004Bu
 #define PEARL_LOGO_RES_ID 11703
 
 DWORD g_pearlGateTls = TLS_OUT_OF_INDEXES;
 ULONGLONG g_lastMenuCloseTick = 0;
+static thread_local bool g_inPearlPaint = false;
 
 static_assert(sizeof(PearlLayerRenderData) == 36, "PEARL_LAYER_RENDER_DATA size");
 
@@ -49,6 +52,12 @@ static DWORD GetRTStartMenuColor()
 
 DWORD __fastcall Hook_ImmersiveColor_GetColor(int type)
 {
+    if (g_inPearlPaint &&
+        (type == 279 || type == 280 || type == PEARL_RT_COLOR_TYPE_START))
+    {
+        return PEARL_DEFAULT_COLOR;
+    }
+
     DWORD result = pOriginalImmersiveColor_GetColor(type);
     if (type == PEARL_RT_COLOR_TYPE_START && IsStartMenuEnabled())
     {
@@ -90,7 +99,12 @@ HRESULT __fastcall Hook_Pearl_LoadColorizedImage(
         }
     }
 
-    return pOriginalPearl_LoadColorizedImage(pData, fFlag, phbmp);
+    const bool previous = g_inPearlPaint;
+    g_inPearlPaint = IsStartMenuEnabled() != 0;
+    const HRESULT hr =
+        pOriginalPearl_LoadColorizedImage(pData, fFlag, phbmp);
+    g_inPearlPaint = previous;
+    return hr;
 }
 
 typedef HRESULT (__fastcall *Pearl_RepaintInternal_t)(
@@ -113,7 +127,12 @@ HRESULT __fastcall Hook_Pearl_RepaintInternal(
                layer->clrDesired);
     }
 
-    return pOriginalPearl_RepaintInternal(pThis, hdc, target, pData);
+    const bool previous = g_inPearlPaint;
+    g_inPearlPaint = IsStartMenuEnabled() != 0;
+    const HRESULT hr =
+        pOriginalPearl_RepaintInternal(pThis, hdc, target, pData);
+    g_inPearlPaint = previous;
+    return hr;
 }
 
 typedef void (__fastcall *Pearl_UpdateLayerVisibility_t)(void* pThis);
