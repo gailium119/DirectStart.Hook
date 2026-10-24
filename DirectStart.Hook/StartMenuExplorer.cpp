@@ -2,6 +2,8 @@
 
 bool g_inGridPaneCreate = false;
 
+void HideStartMenuSearchBox();
+
 typedef void (__fastcall *CPearl_DisplayStartMenu_t)(void* pThis);
 CPearl_DisplayStartMenu_t pOriginalCPearl_DisplayStartMenu = nullptr;
 
@@ -52,6 +54,7 @@ BOOL __fastcall Hook_CDesktopHost__AddWin32Controls(void* pThis)
 
     int result = pOriginalCDesktopHost__AddWin32Controls(pThis);
 
+    HideStartMenuSearchBox();
     DS_Log(L"CDesktopHost::_AddWin32Controls: end result=%d", result);
     return result;
 }
@@ -86,22 +89,46 @@ HRESULT __fastcall Hook_CDesktopHost_AcquireSearchServices(
     const GUID* serviceId,
     void** service)
 {
-    // _InitializeSearchPane is still skipped because Windows.UI.Search crashes
-    // while the retained Desktop2 menu is built on the tray thread. Allowing
-    // the service acquisition lets the search box initialize lazily without
-    // that startup path.
-    HRESULT hr = pOriginalCDesktopHost_AcquireSearchServices
-        ? pOriginalCDesktopHost_AcquireSearchServices(pThis, serviceId, service)
-        : E_NOINTERFACE;
-    if (FAILED(hr) && service)
+    // Search is disabled: Windows.UI.Search crashes while the retained
+    // Desktop2 menu is built on the tray thread, and the search box is hidden.
+    if (service)
     {
         *service = nullptr;
     }
     DS_Log(
-        L"CDesktopHost::_AcquireSearchServices: host=%p hr=0x%08X",
-        pThis,
-        static_cast<unsigned int>(hr));
-    return hr;
+        L"CDesktopHost::_AcquireSearchServices: blocked (search disabled) host=%p",
+        pThis);
+    return E_NOINTERFACE;
+}
+
+static BOOL CALLBACK HideSearchBoxChild(HWND hwnd, LPARAM)
+{
+    wchar_t className[64] = {};
+    if (GetClassNameW(hwnd, className, _countof(className)))
+    {
+        if (wcscmp(className, L"Search Box") == 0 ||
+            wcscmp(className, L"SearchEditBoxWrapperClass") == 0)
+        {
+            ShowWindow(hwnd, SW_HIDE);
+        }
+    }
+    return TRUE;
+}
+
+void HideStartMenuSearchBox()
+{
+    HWND host = FindWindowW(L"DV2ControlHost", nullptr);
+    if (!host)
+    {
+        return;
+    }
+
+    EnumChildWindows(host, HideSearchBoxChild, 0);
+    static LONG s_logged = 0;
+    if (InterlockedIncrement(&s_logged) <= 8)
+    {
+        DS_Log(L"Start menu search box hidden (search disabled)");
+    }
 }
 
 typedef HRESULT (__fastcall *DesktopV2_Build_t)(void* pDeskHost, DWORD dwFlags);
@@ -219,6 +246,7 @@ void __fastcall Hook_CPearl_DisplayStartMenu(void* pThis)
            pThis,
            pThis ? *reinterpret_cast<void**>((char*)pThis + 0xA0) : nullptr);
     pOriginalCPearl_DisplayStartMenu(pThis);
+    HideStartMenuSearchBox();
     DumpStartMenuWindowTree(L"after DisplayStartMenu");
 }
 
