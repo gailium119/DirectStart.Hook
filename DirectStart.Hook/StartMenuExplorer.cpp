@@ -204,6 +204,7 @@ static bool ScrollSysListView(HWND list, int delta)
 
     const int notches = delta / WHEEL_DELTA;
     const int pixels = notches * 60;
+    SetFocus(list);
     SendMessageW(list, LVM_SCROLL, 0, -pixels);
 
     const WPARAM scroll =
@@ -249,6 +250,23 @@ bool ForwardMenuWheel(WPARAM wParam, LPARAM lParam, HWND source)
         static_cast<SHORT>(HIWORD(lParam))};
     HWND underCursor = WindowFromPoint(point);
     HWND pointList = FindListAncestor(underCursor);
+    HWND hostList = host ? FindVisibleAllAppsList(host) : nullptr;
+    wchar_t underClass[64] = {};
+    if (underCursor)
+    {
+        GetClassNameW(underCursor, underClass, _countof(underClass));
+    }
+    static LONG s_listLogged = 0;
+    if (InterlockedIncrement(&s_listLogged) <= 20)
+    {
+        DS_Log(
+            L"wheel cursor=%p class=%s pointList=%p hostList=%p",
+            underCursor,
+            underClass,
+            pointList,
+            hostList);
+    }
+
     if (pointList && ScrollSysListView(pointList, delta))
     {
         return true;
