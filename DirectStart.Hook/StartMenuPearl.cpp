@@ -22,6 +22,8 @@ DWORD g_pearlGateTls = TLS_OUT_OF_INDEXES;
 ULONGLONG g_lastMenuCloseTick = 0;
 static thread_local bool g_inPearlLoad = false;
 static thread_local bool g_inPearlFill = false;
+static volatile LONG g_pearlState = 0;
+static LONG g_themeRefreshed = 0;
 #define PEARL_FILL_RES_ID 11701
 
 static_assert(sizeof(PearlLayerRenderData) == 36, "PEARL_LAYER_RENDER_DATA size");
@@ -53,19 +55,24 @@ static DWORD GetRTStartMenuColor()
 
 DWORD __fastcall Hook_ImmersiveColor_GetColor(int type)
 {
-    if (g_inPearlFill)
+    const LONG state = g_pearlState;
+    if (state != 0)
     {
-        return PEARL_COLOR_BGR;
-    }
+        if (g_inPearlFill)
+        {
+            return PEARL_COLOR_BGR;
+        }
 
-    if (g_inPearlLoad &&
-        (type == 279 || type == 280 || type == PEARL_RT_COLOR_TYPE_START))
-    {
-        return PEARL_COLOR_BGR;
+        if (g_inPearlLoad &&
+            (type == 279 || type == 280 || type == PEARL_RT_COLOR_TYPE_START))
+        {
+            return PEARL_COLOR_BGR;
+        }
     }
 
     DWORD result = pOriginalImmersiveColor_GetColor(type);
-    if (type == PEARL_RT_COLOR_TYPE_START && IsStartMenuEnabled())
+    if (state != 0 && type == PEARL_RT_COLOR_TYPE_START &&
+        IsStartMenuEnabled())
     {
         result = GetRTStartMenuColor();
         static LONG s_logged = 0;
@@ -171,6 +178,7 @@ void __fastcall Hook_Pearl_UpdateLayerVisibility(void* pThis)
     {
         const int state = *reinterpret_cast<int*>(
             reinterpret_cast<char*>(pThis) + 0x1C);
+        g_pearlState = state;
         BYTE* layers = reinterpret_cast<BYTE*>(
             reinterpret_cast<char*>(pThis) + 0x7C);
         if (state == 1 || state == 2)
@@ -261,12 +269,10 @@ void __fastcall Hook_CPearl_OnStartMenuShownOnPearl(void* pThis, bool fOpen, HWN
         DS_Log(L"Pearl RT: OnStartMenuShownOnPearl(%d) pearl=%p", fOpen ? 1 : 0, pThis);
 
     // The pearl bitmaps are often built before d3d11 is loaded, so the
-    // s_LoadOptionallyColorizedImage hook never sees them. Refresh the theme
-    // once after all hooks are live; this rebuilds the pearl resources and
-    // lets the logo-resource fColorize fix apply.
-    static LONG s_themeRefreshed = 0;
+    // s_LoadOptionallyColorizedImage hook never sees them. Refresh once after
+    // the first non-rest state; this also covers hover before the menu opens.
     if (pThis && IsStartMenuEnabled() &&
-        InterlockedExchange(&s_themeRefreshed, 1) == 0 &&
+        InterlockedExchange(&g_themeRefreshed, 1) == 0 &&
         pOriginalCPearl_UpdateTheme)
     {
         DS_Log(L"Pearl RT: refreshing pearl theme for logo colorize fix");
@@ -305,7 +311,19 @@ long __fastcall Hook_CPearl_UpdateState(void* pThis, int state, bool fAnimate)
         DS_Log(L"Pearl RT: _UpdateState(%d, anim=%d) -> %d (menuOpen=%d)",
                state, fAnimate ? 1 : 0, effective, PearlGetMenuOpen(pThis) ? 1 : 0);
     }
-    return pOriginalCPearl_UpdateState(pThis, effective, fAnimate);
+
+    g_pearlState = effective;
+    const long result =
+        pOriginalCPearl_UpdateState(pThis, effective, fAnimate);
+
+    if (effective != 0 && pThis && IsStartMenuEnabled() &&
+        InterlockedExchange(&g_themeRefreshed, 1) == 0 &&
+        pOriginalCPearl_UpdateTheme)
+    {
+        DS_Log(L"Pearl RT: refreshing pearl theme on first active state");
+        pOriginalCPearl_UpdateTheme(pThis);
+    }
+    return result;
 }
 
 
