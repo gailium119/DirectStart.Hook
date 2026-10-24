@@ -116,6 +116,7 @@ HRESULT __fastcall Hook_Pearl_LoadColorizedImage(
     }
 
     const bool fill = pData && IsStartMenuEnabled() &&
+        g_pearlState != 0 &&
         pData->renderMode == 1 && pData->resId == PEARL_FILL_RES_ID;
     if (fill)
     {
@@ -156,6 +157,7 @@ HRESULT __fastcall Hook_Pearl_RepaintInternal(
     }
 
     const bool fill = layer && IsStartMenuEnabled() &&
+        g_pearlState != 0 &&
         layer->renderMode == 1 && layer->resId == PEARL_FILL_RES_ID;
     if (fill)
     {
