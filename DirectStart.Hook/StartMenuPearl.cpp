@@ -121,6 +121,20 @@ static bool PearlLookupLayer3(const PearlLayerRenderData* d, DWORD* pd7)
     return false;
 }
 
+static bool PearlIsNeutralColor(DWORD color)
+{
+    const int red = static_cast<int>((color >> 16) & 0xFF);
+    const int green = static_cast<int>((color >> 8) & 0xFF);
+    const int blue = static_cast<int>(color & 0xFF);
+    const int maximum = red > green ? (red > blue ? red : blue)
+                                    : (green > blue ? green : blue);
+    const int minimum = red < green ? (red < blue ? red : blue)
+                                    : (green < blue ? green : blue);
+    // Bright grayscale = the Windows logo / foreground glyph. Near-black is
+    // left to the accent path (it is usually the pearl background).
+    return maximum - minimum <= 4 && maximum >= 32;
+}
+
 HRESULT __fastcall Hook_Pearl_LoadColorizedImage(
     PearlLayerRenderData* pData, bool fFlag, HBITMAP* phbmp)
 {
@@ -140,12 +154,24 @@ HRESULT __fastcall Hook_Pearl_LoadColorizedImage(
                 haveAccent = accent != 0;
             }
 
-            if (haveAccent)
+            const DWORD before = static_cast<DWORD>(pData->f[7]);
+            if (haveAccent && PearlIsNeutralColor(before))
+            {
+                // Neutral layers are the Windows logo / foreground glyph, not
+                // the accent-colored background. Leave them alone so the logo
+                // keeps its white/gray color instead of being tinted.
+                static LONG s_neutralLogged = 0;
+                if (InterlockedIncrement(&s_neutralLogged) <= 8)
+                {
+                    DS_Log(L"Pearl RT: layer5 %dx%d neutral 0x%08X preserved",
+                           pData->f[3], pData->f[4], before);
+                }
+            }
+            else if (haveAccent)
             {
                 // Hover and pressed are separate pearl layers (type 282), but
-                // they must render with the same start-button color. Use the
-                // normal layer's color (including its alpha) for both.
-                const DWORD before = static_cast<DWORD>(pData->f[7]);
+                // they must render with the same start-button background
+                // color. Use the normal layer's color for both.
                 const DWORD after = accent;
                 pData->f[7] = static_cast<int>(after);
                 static LONG s_logged = 0;
