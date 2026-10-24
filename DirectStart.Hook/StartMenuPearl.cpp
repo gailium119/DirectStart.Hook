@@ -22,6 +22,7 @@ DWORD g_pearlGateTls = TLS_OUT_OF_INDEXES;
 ULONGLONG g_lastMenuCloseTick = 0;
 static thread_local bool g_inPearlLoad = false;
 static thread_local bool g_inPearlFill = false;
+static thread_local bool g_inPearlRepaint = false;
 static volatile LONG g_pearlState = 0;
 static LONG g_lastThemeState = -1;
 static thread_local bool g_inThemeRefresh = false;
@@ -56,23 +57,23 @@ static DWORD GetRTStartMenuColor()
 
 DWORD __fastcall Hook_ImmersiveColor_GetColor(int type)
 {
-    const LONG state = g_pearlState;
-    if (state != 0)
+    if (g_inPearlFill)
     {
-        if (g_inPearlFill)
-        {
-            return PEARL_COLOR_BGR;
-        }
+        return PEARL_COLOR_BGR;
+    }
 
-        if (g_inPearlLoad &&
-            (type == 279 || type == 280 || type == PEARL_RT_COLOR_TYPE_START))
-        {
-            return PEARL_COLOR_BGR;
-        }
+    if (g_inPearlLoad &&
+        (type == 279 || type == 280 || type == PEARL_RT_COLOR_TYPE_START))
+    {
+        return PEARL_COLOR_BGR;
     }
 
     DWORD result = pOriginalImmersiveColor_GetColor(type);
-    if (state != 0 && type == PEARL_RT_COLOR_TYPE_START &&
+
+    // Only override color 282 while the pearl is actually repainting. The
+    // taskbar's rest logo also queries this immersive color outside
+    // _RepaintInternal; overriding it there made the rest logo black.
+    if (g_inPearlRepaint && type == PEARL_RT_COLOR_TYPE_START &&
         IsStartMenuEnabled())
     {
         result = GetRTStartMenuColor();
@@ -161,9 +162,12 @@ HRESULT __fastcall Hook_Pearl_RepaintInternal(
     }
 
     const bool previousFill = g_inPearlFill;
+    const bool previousRepaint = g_inPearlRepaint;
     g_inPearlFill = fill;
+    g_inPearlRepaint = IsStartMenuEnabled() && g_pearlState != 0;
     const HRESULT hr =
         pOriginalPearl_RepaintInternal(pThis, hdc, target, pData);
+    g_inPearlRepaint = previousRepaint;
     g_inPearlFill = previousFill;
     return hr;
 }
