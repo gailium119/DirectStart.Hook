@@ -12,11 +12,10 @@
  */
 
 #define PEARL_RT_COLOR_TYPE_START 282
-// Both paths consume the value as COLORREF (0x00BBGGRR). The previous
-// repaint value 0xFF0000FF was read as BGR and rendered red; use the same
-// BGR blue for both. #0000FF -> R=00, G=00, B=FF.
-#define PEARL_COLOR_BGR  0x00FF0000u
-#define PEARL_COLOR_ARGB 0x00FF0000u
+// Both paths consume the value as COLORREF (0x00BBGGRR). #4B0082 ->
+// R=4B, G=00, B=82.
+#define PEARL_COLOR_BGR     0x0082004Bu
+#define PEARL_COLOR_REPAINT 0x0082004Bu
 #define PEARL_LOGO_RES_ID 11703
 
 DWORD g_pearlGateTls = TLS_OUT_OF_INDEXES;
@@ -47,7 +46,7 @@ static DWORD GetRTStartMenuColor()
     }
 
     // ARGB for the repaint/fill path. The loader path below converts to BGR.
-    return PEARL_COLOR_ARGB;
+    return PEARL_COLOR_REPAINT;
 }
 
 DWORD __fastcall Hook_ImmersiveColor_GetColor(int type)
