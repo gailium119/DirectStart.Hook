@@ -14,9 +14,9 @@
 #define PEARL_RT_COLOR_TYPE_START 282
 // s_LoadOptionallyColorizedImage writes the color into a 32-bpp DIB as
 // B,G,R,A, so it consumes COLORREF (0x00BBGGRR). The repaint/fill path
-// consumes ARGB (0xAARRGGBB). Both values below are #4B0082.
-#define PEARL_COLOR_BGR  0x0082004Bu
-#define PEARL_COLOR_ARGB 0xFF4B0082u
+// consumes ARGB (0xAARRGGBB). Green is used for testing the channel order.
+#define PEARL_COLOR_BGR  0xFF00FF00u
+#define PEARL_COLOR_ARGB 0xFF00FF00u
 #define PEARL_LOGO_RES_ID 11703
 
 DWORD g_pearlGateTls = TLS_OUT_OF_INDEXES;
