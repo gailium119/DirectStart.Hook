@@ -1439,6 +1439,7 @@ BOOL DS_HookSymbols(
 
     std::vector<DWORD> rvas(count, 0);
     std::vector<BOOL> resolved(count, FALSE);
+    std::vector<BOOL> absent(count, FALSE);
     std::vector<std::wstring> matchedNames(count);
 
     struct PendingSymbol
@@ -1474,8 +1475,22 @@ BOOL DS_HookSymbols(
             }
 
             DWORD64 address = 0;
+            const std::wstring iniValue =
+                Trim(GetIniString(section.c_str(), name.c_str()));
+            if (iniValue == L"0x0" || iniValue == L"0X0" ||
+                iniValue == L"0")
+            {
+                absent[index] = TRUE;
+                resolved[index] = TRUE;
+                matchedNames[index] = name;
+                DS_Log(
+                    L"%s: %s marked absent in ini",
+                    section.c_str(),
+                    name.c_str());
+                break;
+            }
             if (ParseAddress(
-                    GetIniString(section.c_str(), name.c_str()),
+                    iniValue,
                     moduleBase,
                     imageSize,
                     &address))
@@ -1571,6 +1586,30 @@ BOOL DS_HookSymbols(
                 }
             }
 
+            // The PDB is usable, so any still-unresolved entries are genuinely
+            // absent from this DLL build. Cache 0x0 so the next start skips
+            // PDB lookup for them instead of downloading again.
+            for (PendingSymbol& item : pending)
+            {
+                if (resolved[item.hookIndex])
+                {
+                    continue;
+                }
+
+                absent[item.hookIndex] = TRUE;
+                resolved[item.hookIndex] = TRUE;
+                matchedNames[item.hookIndex] =
+                    item.names.empty() ? std::wstring() : item.names.front();
+                for (const std::wstring& name : item.names)
+                {
+                    SetIniString(section.c_str(), name.c_str(), L"0x0");
+                }
+                DS_Log(
+                    L"%s: %s absent from PDB; cached as 0x0",
+                    section.c_str(),
+                    item.names.empty() ? L"<empty>" : item.names.front().c_str());
+            }
+
             const std::size_t resolvedCount = countResolved();
             DS_Log(
                 L"%s: resolved %llu of %llu pending symbols from %s",
@@ -1629,6 +1668,15 @@ BOOL DS_HookSymbols(
             {
                 allRequired = FALSE;
             }
+            continue;
+        }
+
+        if (absent[index])
+        {
+            DS_Log(
+                L"%s: %s absent; skipped",
+                section.c_str(),
+                hooks[index].symbols[0] ? hooks[index].symbols[0] : L"<empty>");
             continue;
         }
 
