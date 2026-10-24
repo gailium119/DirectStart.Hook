@@ -86,15 +86,22 @@ HRESULT __fastcall Hook_CDesktopHost_AcquireSearchServices(
     const GUID* serviceId,
     void** service)
 {
-    if (service)
+    // _InitializeSearchPane is still skipped because Windows.UI.Search crashes
+    // while the retained Desktop2 menu is built on the tray thread. Allowing
+    // the service acquisition lets the search box initialize lazily without
+    // that startup path.
+    HRESULT hr = pOriginalCDesktopHost_AcquireSearchServices
+        ? pOriginalCDesktopHost_AcquireSearchServices(pThis, serviceId, service)
+        : E_NOINTERFACE;
+    if (FAILED(hr) && service)
     {
         *service = nullptr;
     }
     DS_Log(
-        L"CDesktopHost::_AcquireSearchServices: blocked for host=%p",
-        pThis
-    );
-    return E_NOINTERFACE;
+        L"CDesktopHost::_AcquireSearchServices: host=%p hr=0x%08X",
+        pThis,
+        static_cast<unsigned int>(hr));
+    return hr;
 }
 
 typedef HRESULT (__fastcall *DesktopV2_Build_t)(void* pDeskHost, DWORD dwFlags);
@@ -240,6 +247,21 @@ LRESULT __fastcall Hook_CTray_v_WndProc(void* pThis, HWND hWnd, UINT uMsg, WPARA
 {
     if (IsStartMenuEnabled())
     {
+        if (uMsg == WM_MOUSEWHEEL)
+        {
+            const POINT point = {
+                static_cast<SHORT>(LOWORD(lParam)),
+                static_cast<SHORT>(HIWORD(lParam))};
+            HWND target = WindowFromPoint(point);
+            if (target && target != hWnd)
+            {
+                // The recreated menu popup may not own focus, so the wheel
+                // message reaches the tray. Forward it to the element under
+                // the cursor (All apps list / search box).
+                return SendMessageW(target, uMsg, wParam, lParam);
+            }
+        }
+
         switch (uMsg)
         {
             case 0x40D: 
