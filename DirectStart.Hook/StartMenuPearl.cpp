@@ -12,6 +12,7 @@
  */
 
 #define PEARL_RT_COLOR_TYPE_START 282
+#define PEARL_DEFAULT_COLOR 0xFF4B0082u  // dark purple / indigo
 #define PEARL_LOGO_RES_ID 11703
 
 DWORD g_pearlGateTls = TLS_OUT_OF_INDEXES;
@@ -40,20 +41,10 @@ static DWORD GetRTStartMenuColor()
         return value;
     }
 
-    // The immersive color type 0 is not the visible taskbar accent on all 8.1
-    // themes (it can be a dark red). The colorization layer must use the same
-    // accent that DWM paints behind the start button.
-    DWORD colorization = 0;
-    BOOL opaque = FALSE;
-    if (SUCCEEDED(DwmGetColorizationColor(&colorization, &opaque)) &&
-        (colorization >> 24) != 0)
-    {
-        return colorization;
-    }
-
-    return pOriginalImmersiveColor_GetColor
-        ? pOriginalImmersiveColor_GetColor(0)
-        : 0xFF000000;
+    // Use a fixed dark-purple default instead of the DWM/immersive color.
+    // The HKLM OverrideColor value above still takes precedence for custom
+    // colors.
+    return PEARL_DEFAULT_COLOR;
 }
 
 DWORD __fastcall Hook_ImmersiveColor_GetColor(int type)
