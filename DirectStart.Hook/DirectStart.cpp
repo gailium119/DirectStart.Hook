@@ -51,6 +51,7 @@ namespace
     volatile LONG g_logEnabled = 0;
     HANDLE g_logFile = INVALID_HANDLE_VALUE;
     std::wstring g_logPath;
+    std::wstring g_dllTimestamp;
 
     INIT_ONCE g_settingsOnce = INIT_ONCE_STATIC_INIT;
     BOOL g_startMenuEnabled = TRUE;
@@ -249,36 +250,157 @@ namespace
         return TRUE;
     }
 
-    void OpenLogFile()
+    bool OpenLogFile()
     {
         if (g_logPath.empty())
         {
-            return;
+            return false;
+        }
+        if (g_logFile != INVALID_HANDLE_VALUE)
+        {
+            return true;
         }
 
         g_logFile = CreateFileW(
             g_logPath.c_str(),
-            FILE_APPEND_DATA,
+            FILE_APPEND_DATA | GENERIC_WRITE,
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
             nullptr,
             OPEN_ALWAYS,
             FILE_ATTRIBUTE_NORMAL,
             nullptr);
+        return g_logFile != INVALID_HANDLE_VALUE;
     }
 
-    std::wstring GetExecutableDirectory()
+    bool RecreateLogFile()
     {
-        wchar_t path[MAX_PATH] = {};
-        const DWORD length = GetModuleFileNameW(
-            nullptr, path, static_cast<DWORD>(_countof(path)));
-        if (length == 0 || length >= _countof(path))
+        if (g_logFile != INVALID_HANDLE_VALUE)
+        {
+            CloseHandle(g_logFile);
+            g_logFile = INVALID_HANDLE_VALUE;
+        }
+        if (g_logPath.empty())
+        {
+            return false;
+        }
+
+        // A stale/locked log is the usual write failure. Delete and recreate it
+        // once instead of silently dropping the remaining diagnostics.
+        DeleteFileW(g_logPath.c_str());
+        g_logFile = CreateFileW(
+            g_logPath.c_str(),
+            GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            nullptr,
+            CREATE_ALWAYS,
+            FILE_ATTRIBUTE_NORMAL,
+            nullptr);
+        return g_logFile != INVALID_HANDLE_VALUE;
+    }
+
+    std::wstring GetTempLogPath()
+    {
+        wchar_t directory[MAX_PATH] = {};
+        const DWORD length =
+            GetTempPathW(static_cast<DWORD>(_countof(directory)), directory);
+        if (length == 0 || length >= _countof(directory))
         {
             return {};
         }
-        const size_t slash = std::wstring(path).find_last_of(L"\\/");
-        return slash == std::wstring::npos
-            ? std::wstring()
-            : std::wstring(path, slash);
+        return std::wstring(directory) + L"DirectStart-StartMenu.log";
+    }
+
+    std::wstring GetDllTimestamp()
+    {
+        HMODULE module = nullptr;
+        if (!GetModuleHandleExW(
+                GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                    GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                reinterpret_cast<LPCWSTR>(&GetDllTimestamp),
+                &module))
+        {
+            return L"unknown";
+        }
+
+        wchar_t path[MAX_PATH] = {};
+        if (!GetModuleFileNameW(module, path, _countof(path)))
+        {
+            return L"unknown";
+        }
+
+        WIN32_FILE_ATTRIBUTE_DATA attributes = {};
+        if (!GetFileAttributesExW(
+                path, GetFileExInfoStandard, &attributes))
+        {
+            return L"unknown";
+        }
+
+        FILETIME localTime = {};
+        SYSTEMTIME time = {};
+        if (!FileTimeToLocalFileTime(&attributes.ftLastWriteTime, &localTime) ||
+            !FileTimeToSystemTime(&localTime, &time))
+        {
+            return L"unknown";
+        }
+
+        wchar_t text[64] = {};
+        swprintf_s(
+            text,
+            L"%04u-%02u-%02u %02u:%02u:%02u",
+            time.wYear,
+            time.wMonth,
+            time.wDay,
+            time.wHour,
+            time.wMinute,
+            time.wSecond);
+        return text;
+    }
+
+    void RestartExplorer()
+    {
+        wchar_t comspec[MAX_PATH] = L"C:\\Windows\\System32\\cmd.exe";
+        GetEnvironmentVariableW(L"ComSpec", comspec, _countof(comspec));
+
+        wchar_t command[] =
+            L"/c taskkill /f /im explorer.exe & "
+            L"ping -n 2 127.0.0.1 >nul & start \"\" explorer.exe";
+        STARTUPINFOW startup = {};
+        startup.cb = sizeof(startup);
+        PROCESS_INFORMATION process = {};
+        if (CreateProcessW(
+                comspec,
+                command,
+                nullptr,
+                nullptr,
+                FALSE,
+                CREATE_NO_WINDOW,
+                nullptr,
+                nullptr,
+                &startup,
+                &process))
+        {
+            CloseHandle(process.hThread);
+            CloseHandle(process.hProcess);
+            Sleep(300);
+        }
+        ExitProcess(0);
+    }
+
+    void ReportLogFailure(DWORD error, const std::wstring& path)
+    {
+        wchar_t text[1024] = {};
+        swprintf_s(
+            text,
+            L"DirectStart cannot write its log file:\n%s\n\n"
+            L"Error: %lu\n\nExplorer will be restarted.",
+            path.empty() ? L"<no path>" : path.c_str(),
+            error);
+        MessageBoxW(
+            nullptr,
+            text,
+            L"DirectStart logging error",
+            MB_OK | MB_ICONERROR | MB_TOPMOST);
+        RestartExplorer();
     }
 
     // -----------------------------------------------------------------------
@@ -863,19 +985,30 @@ void DS_InitLog()
 {
     InitOnceExecuteOnce(&g_logLockOnce, InitLogLock, nullptr, nullptr);
 
+    g_dllTimestamp = GetDllTimestamp();
+
     std::wstring directory = GetLocalAppDataDirectory();
-    if (directory.empty())
+    std::wstring path;
+    if (!directory.empty())
     {
-        return;
+        directory += L"\\DirectStart";
+        CreateDirectoryW(directory.c_str(), nullptr);
+        path = directory + L"\\" + kLogFileName;
     }
-
-    directory += L"\\DirectStart";
-    CreateDirectoryW(directory.c_str(), nullptr);
-
-    g_logPath = directory + L"\\" + kLogFileName;
+    else
+    {
+        // Never fall back to the explorer.exe directory (C:\Windows).
+        path = GetTempLogPath();
+    }
+    if (path.empty())
+    {
+        path = GetTempLogPath();
+    }
+    g_logPath = path;
 
     WIN32_FILE_ATTRIBUTE_DATA attributes = {};
-    if (GetFileAttributesExW(
+    if (!g_logPath.empty() &&
+        GetFileAttributesExW(
             g_logPath.c_str(), GetFileExInfoStandard, &attributes) &&
         attributes.nFileSizeHigh == 0 &&
         attributes.nFileSizeLow > kMaxLogSize)
@@ -891,15 +1024,14 @@ void DS_InitLog()
         CloseHandle(g_logFile);
         g_logFile = INVALID_HANDLE_VALUE;
     }
-    OpenLogFile();
 
-    if (g_logFile == INVALID_HANDLE_VALUE)
+    if (!OpenLogFile() && !RecreateLogFile())
     {
-        const std::wstring fallbackDirectory = GetExecutableDirectory();
-        if (!fallbackDirectory.empty())
+        const std::wstring tempPath = GetTempLogPath();
+        if (!tempPath.empty() && tempPath != g_logPath)
         {
-            g_logPath = fallbackDirectory + L"\\DirectStart-StartMenu.log";
-            OpenLogFile();
+            g_logPath = tempPath;
+            RecreateLogFile();
         }
     }
     LeaveCriticalSection(&g_logLock);
@@ -938,49 +1070,78 @@ void DS_Log(const wchar_t* format, ...)
         return; // Never deadlock a crashing thread on its own log entry.
     }
 
+    if (g_dllTimestamp.empty())
+    {
+        g_dllTimestamp = GetDllTimestamp();
+    }
+
+    SYSTEMTIME now = {};
+    GetLocalTime(&now);
+
+    wchar_t prefix[256] = {};
+    swprintf_s(
+        prefix,
+        L"%04u-%02u-%02u %02u:%02u:%02u.%03u [%5lu] [d3d11 %s] ",
+        now.wYear,
+        now.wMonth,
+        now.wDay,
+        now.wHour,
+        now.wMinute,
+        now.wSecond,
+        now.wMilliseconds,
+        GetCurrentThreadId(),
+        g_dllTimestamp.c_str());
+
+    std::wstring line;
+    line.reserve(wcslen(prefix) + wcslen(message) + 2);
+    line += prefix;
+    line += message;
+    line += L"\r\n";
+
     if (g_logFile == INVALID_HANDLE_VALUE)
     {
-        OpenLogFile();
-    }
-    if (g_logFile != INVALID_HANDLE_VALUE)
-    {
-        SYSTEMTIME now = {};
-        GetLocalTime(&now);
-
-        wchar_t prefix[96] = {};
-        const int prefixLength = swprintf_s(
-            prefix,
-            L"%04u-%02u-%02u %02u:%02u:%02u.%03u [%5lu] ",
-            now.wYear,
-            now.wMonth,
-            now.wDay,
-            now.wHour,
-            now.wMinute,
-            now.wSecond,
-            now.wMilliseconds,
-            GetCurrentThreadId());
-        if (prefixLength > 0)
+        if (!OpenLogFile())
         {
-            DWORD written = 0;
-            WriteFile(
-                g_logFile,
-                prefix,
-                static_cast<DWORD>(prefixLength * sizeof(wchar_t)),
-                &written,
-                nullptr);
+            RecreateLogFile();
         }
+    }
 
+    auto writeLine = [&]() -> bool
+    {
+        if (g_logFile == INVALID_HANDLE_VALUE)
+        {
+            return false;
+        }
+        const DWORD bytes =
+            static_cast<DWORD>(line.size() * sizeof(wchar_t));
         DWORD written = 0;
-        WriteFile(
-            g_logFile,
-            message,
-            static_cast<DWORD>(wcslen(message) * sizeof(wchar_t)),
-            &written,
-            nullptr);
-        WriteFile(g_logFile, L"\r\n", 4, &written, nullptr);
+        return WriteFile(g_logFile, line.data(), bytes, &written, nullptr) &&
+            written == bytes;
+    };
+
+    bool failed = false;
+    DWORD error = ERROR_WRITE_FAULT;
+    const std::wstring failedPath = g_logPath;
+
+    if (!writeLine())
+    {
+        error = GetLastError();
+        if (!RecreateLogFile() || !writeLine())
+        {
+            if (error == ERROR_SUCCESS)
+            {
+                error = GetLastError();
+            }
+            failed = true;
+        }
     }
 
     LeaveCriticalSection(&g_logLock);
+
+    if (failed)
+    {
+        ReportLogFailure(error, failedPath);
+    }
 }
 
 int DS_GetIntValue(const wchar_t* name, int defaultValue)
