@@ -16,6 +16,7 @@
 
 DWORD g_pearlGateTls = TLS_OUT_OF_INDEXES;
 ULONGLONG g_lastMenuCloseTick = 0;
+static thread_local bool g_inLogoColorize = false;
 
 static_assert(sizeof(PearlLayerRenderData) == 36, "PEARL_LAYER_RENDER_DATA size");
 
@@ -46,6 +47,15 @@ static DWORD GetRTStartMenuColor()
 
 DWORD __fastcall Hook_ImmersiveColor_GetColor(int type)
 {
+    if (g_inLogoColorize)
+    {
+        // The colorization pass must keep fColorize=1 so the PNG alpha is
+        // honoured; clearing it makes the transparent background black.
+        // Instead, give the logo resource a white color, preserving both the
+        // white glyph and its transparency.
+        return 0xFFFFFFFF;
+    }
+
     DWORD result = pOriginalImmersiveColor_GetColor(type);
     if (type == PEARL_RT_COLOR_TYPE_START && IsStartMenuEnabled())
     {
@@ -87,25 +97,24 @@ HRESULT __fastcall Hook_Pearl_LoadColorizedImage(
         }
     }
 
-    if (pData && IsStartMenuEnabled() && pData->renderMode == 1 &&
-        pData->resId == PEARL_LOGO_RES_ID && pData->fColorize)
+    const bool logo = pData && IsStartMenuEnabled() &&
+        pData->renderMode == 1 && pData->resId == PEARL_LOGO_RES_ID;
+    if (logo)
     {
-        // Resource 11703 is the white 32x32 Windows logo (the same PNG is in
-        // the ARM twinui.dll). It is painted several times with immersive
-        // color types 279/280/282; colorizing any of them tints the white
-        // glyph and its transparent background. Keep resId and alpha intact,
-        // only clear fColorize.
-        pData->fColorize = 0;
         static LONG s_logged = 0;
         if (InterlockedIncrement(&s_logged) <= 8)
         {
-            DS_Log(L"Pearl RT: logo resId=%u needAlpha=%u colorize=0 clr=%d",
-                   pData->resId,
-                   pData->fNeedAlpha,
-                   pData->clrDesired);
+            DS_Log(L"Pearl RT: logo colorize white res=%u needAlpha=%u clr=%d",
+                   pData->resId, pData->fNeedAlpha, pData->clrDesired);
         }
     }
-    return pOriginalPearl_LoadColorizedImage(pData, fFlag, phbmp);
+
+    const bool previous = g_inLogoColorize;
+    g_inLogoColorize = logo;
+    const HRESULT hr =
+        pOriginalPearl_LoadColorizedImage(pData, fFlag, phbmp);
+    g_inLogoColorize = previous;
+    return hr;
 }
 
 typedef HRESULT (__fastcall *Pearl_RepaintInternal_t)(
@@ -128,19 +137,24 @@ HRESULT __fastcall Hook_Pearl_RepaintInternal(
                layer->clrDesired);
     }
 
-    if (layer && IsStartMenuEnabled() && layer->renderMode == 1 &&
-        layer->resId == PEARL_LOGO_RES_ID && layer->fColorize)
+    const bool logo = layer && IsStartMenuEnabled() &&
+        layer->renderMode == 1 && layer->resId == PEARL_LOGO_RES_ID;
+    if (logo)
     {
-        layer->fColorize = 0;
         static LONG s_logoRepaint = 0;
         if (InterlockedIncrement(&s_logoRepaint) <= 8)
         {
-            DS_Log(L"Pearl RT: repaint logo res=%u colorize=0 clr=%d",
+            DS_Log(L"Pearl RT: repaint logo white res=%u clr=%d",
                    layer->resId, layer->clrDesired);
         }
     }
 
-    return pOriginalPearl_RepaintInternal(pThis, hdc, target, pData);
+    const bool previous = g_inLogoColorize;
+    g_inLogoColorize = logo;
+    const HRESULT hr =
+        pOriginalPearl_RepaintInternal(pThis, hdc, target, pData);
+    g_inLogoColorize = previous;
+    return hr;
 }
 
 typedef void (__fastcall *Pearl_UpdateLayerVisibility_t)(void* pThis);
