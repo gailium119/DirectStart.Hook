@@ -65,7 +65,8 @@ DWORD __fastcall Hook_ImmersiveColor_GetColor(int type)
     if (g_inPearlLoad &&
         (type == 279 || type == 280 || type == PEARL_RT_COLOR_TYPE_START))
     {
-        return PEARL_COLOR_BGR;
+        // Rest must stay white; hover/press colorize with the target purple.
+        return g_pearlState != 0 ? PEARL_COLOR_BGR : 0x00FFFFFFu;
     }
 
     DWORD result = pOriginalImmersiveColor_GetColor(type);
