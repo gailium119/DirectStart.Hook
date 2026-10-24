@@ -6,6 +6,7 @@
 
 DWORD g_pearlGateTls = TLS_OUT_OF_INDEXES;
 ULONGLONG g_lastMenuCloseTick = 0;
+static thread_local bool g_inPearlImage = false;
 
 struct PearlGateScope
 {
@@ -22,6 +23,16 @@ struct PearlGateScope
         SetLastError(err);
     }
 };
+
+static bool InPearlGate()
+{
+    if (g_pearlGateTls == TLS_OUT_OF_INDEXES)
+        return false;
+    const DWORD err = GetLastError();
+    const bool in = TlsGetValue(g_pearlGateTls) != nullptr;
+    SetLastError(err);
+    return in;
+}
 
 static_assert(sizeof(PearlLayerRenderData) == 36, "PEARL_LAYER_RENDER_DATA size");
 
@@ -56,10 +67,15 @@ static DWORD GetRTStartMenuColor()
 
 DWORD __fastcall Hook_ImmersiveColor_GetColor(int type)
 {
-    // Do not override the immersive color globally. The same color type (282)
-    // is also queried for the start-button logo, so replacing it here also
-    // tinted the white Windows glyph. The pearl layer color is handled in
-    // Hook_Pearl_LoadColorizedImage instead.
+    // Color 282 is used both for the accent-colored start-button background
+    // and for the logo image. s_LoadOptionallyColorizedImage marks the logo
+    // image load with g_inPearlImage, so the logo keeps its own white tint
+    // while the background still receives the accent color here.
+    if (type == PEARL_RT_COLOR_TYPE_START && IsStartMenuEnabled() &&
+        InPearlGate() && !g_inPearlImage)
+    {
+        return GetRTStartMenuColor();
+    }
     return pOriginalImmersiveColor_GetColor(type);
 }
 
@@ -67,120 +83,40 @@ typedef HRESULT (__fastcall *Pearl_LoadColorizedImage_t)(
     PearlLayerRenderData* pData, bool fFlag, HBITMAP* phbmp);
 Pearl_LoadColorizedImage_t pOriginalPearl_LoadColorizedImage = nullptr;
 
-struct PearlLayer3Entry
-{
-    int w;
-    int h;
-    DWORD d7;
-    bool valid;
-};
-static PearlLayer3Entry g_pearlLayer3[8] = {};
-
-static void PearlRememberLayer3(const PearlLayerRenderData* d)
-{
-    PearlLayer3Entry* freeSlot = nullptr;
-    for (PearlLayer3Entry& e : g_pearlLayer3)
-    {
-        if (e.valid && e.w == d->f[3] && e.h == d->f[4])
-        {
-            e.d7 = static_cast<DWORD>(d->f[7]);
-            return;
-        }
-        if (!e.valid && !freeSlot)
-            freeSlot = &e;
-    }
-    if (freeSlot)
-    {
-        freeSlot->w = d->f[3];
-        freeSlot->h = d->f[4];
-        freeSlot->d7 = static_cast<DWORD>(d->f[7]);
-        freeSlot->valid = true;
-    }
-}
-
-static bool PearlLookupLayer3(const PearlLayerRenderData* d, DWORD* pd7)
-{
-    for (const PearlLayer3Entry& e : g_pearlLayer3)
-    {
-        if (e.valid && e.w == d->f[3] && e.h == d->f[4])
-        {
-            *pd7 = e.d7;
-            return true;
-        }
-    }
-    return false;
-}
-
-static bool PearlIsNeutralColor(DWORD color)
-{
-    const int red = static_cast<int>((color >> 16) & 0xFF);
-    const int green = static_cast<int>((color >> 8) & 0xFF);
-    const int blue = static_cast<int>(color & 0xFF);
-    const int maximum = red > green ? (red > blue ? red : blue)
-                                    : (green > blue ? green : blue);
-    const int minimum = red < green ? (red < blue ? red : blue)
-                                    : (green < blue ? green : blue);
-    // Bright grayscale = the Windows logo / foreground glyph. Near-black is
-    // left to the accent path (it is usually the pearl background).
-    return maximum - minimum <= 4 && maximum >= 32;
-}
-
 HRESULT __fastcall Hook_Pearl_LoadColorizedImage(
     PearlLayerRenderData* pData, bool fFlag, HBITMAP* phbmp)
 {
     if (pData && IsStartMenuEnabled() && pData->f[6] == 1)
     {
-        if (pData->f[8] == 0)
+        if (pData->f[8] == PEARL_RT_COLOR_TYPE_START)
         {
-            PearlRememberLayer3(pData);
-        }
-        else if (pData->f[8] == PEARL_RT_COLOR_TYPE_START)
-        {
-            DWORD accent = 0;
-            bool haveAccent = PearlLookupLayer3(pData, &accent);
-            if (!haveAccent)
-            {
-                accent = GetRTStartMenuColor();
-                haveAccent = accent != 0;
-            }
-
+            // The 32x32 type-282 layer is the Windows logo tile. Keep its
+            // original high byte (state flag/opacity) and force the glyph tint
+            // to white; the accent square is supplied by GetColor(282) above.
             const DWORD before = static_cast<DWORD>(pData->f[7]);
-            if (haveAccent && PearlIsNeutralColor(before))
+            const DWORD after =
+                (before & 0xFF000000u) | 0x00FFFFFFu;
+            pData->f[7] = static_cast<int>(after);
+            static LONG s_logged = 0;
+            if (InterlockedIncrement(&s_logged) <= 8)
             {
-                // Neutral layers are the Windows logo / foreground glyph, not
-                // the accent-colored background. Leave them alone so the logo
-                // keeps its white/gray color instead of being tinted.
-                static LONG s_neutralLogged = 0;
-                if (InterlockedIncrement(&s_neutralLogged) <= 8)
-                {
-                    DS_Log(L"Pearl RT: layer5 %dx%d neutral 0x%08X preserved",
-                           pData->f[3], pData->f[4], before);
-                }
-            }
-            else if (haveAccent)
-            {
-                // Hover and pressed are separate pearl layers (type 282), but
-                // they must render with the same start-button background
-                // color. Use the normal layer's color for both.
-                const DWORD after = accent;
-                pData->f[7] = static_cast<int>(after);
-                static LONG s_logged = 0;
-                if (InterlockedIncrement(&s_logged) <= 8)
-                {
-                    DS_Log(L"Pearl RT: layer5 %dx%d unified 0x%08X -> 0x%08X (accent 0x%08X)",
-                           pData->f[3], pData->f[4], before, after, accent);
-                }
-            }
-            else
-            {
-                DS_Log(L"Pearl RT: layer5 %dx%d - no accent color, unchanged",
-                       pData->f[3], pData->f[4]);
+                DS_Log(L"Pearl RT: logo layer %dx%d '%08X' -> '%08X' (white)",
+                       pData->f[3], pData->f[4], before, after);
             }
         }
     }
 
+    const bool pearlImage =
+        pData && pData->f[8] == PEARL_RT_COLOR_TYPE_START;
+    const bool previousPearlImage = g_inPearlImage;
+    g_inPearlImage = pearlImage;
+
     PearlGateScope gate;
-    return pOriginalPearl_LoadColorizedImage(pData, fFlag, phbmp);
+    const HRESULT hr =
+        pOriginalPearl_LoadColorizedImage(pData, fFlag, phbmp);
+
+    g_inPearlImage = previousPearlImage;
+    return hr;
 }
 
 typedef HRESULT (__fastcall *Pearl_RepaintInternal_t)(
