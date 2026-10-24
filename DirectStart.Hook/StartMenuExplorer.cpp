@@ -246,6 +246,7 @@ static LRESULT CALLBACK MenuWheelSubclass(
 }
 
 static HHOOK g_wheelGetMessageHook = nullptr;
+static HHOOK g_wheelCallWndHook = nullptr;
 
 static LRESULT CALLBACK WheelGetMessageProc(int code, WPARAM wParam, LPARAM lParam)
 {
@@ -254,6 +255,11 @@ static LRESULT CALLBACK WheelGetMessageProc(int code, WPARAM wParam, LPARAM lPar
         MSG* msg = reinterpret_cast<MSG*>(lParam);
         if (msg && msg->message == WM_MOUSEWHEEL)
         {
+            static LONG s_logged = 0;
+            if (InterlockedIncrement(&s_logged) <= 20)
+            {
+                DS_Log(L"GetMessage wheel hwnd=%p", msg->hwnd);
+            }
             HWND host = FindWindowW(L"DV2ControlHost", nullptr);
             if (host && IsWindowVisible(host) &&
                 ForwardMenuWheel(msg->wParam, msg->lParam))
@@ -263,6 +269,24 @@ static LRESULT CALLBACK WheelGetMessageProc(int code, WPARAM wParam, LPARAM lPar
         }
     }
     return CallNextHookEx(g_wheelGetMessageHook, code, wParam, lParam);
+}
+
+static LRESULT CALLBACK WheelCallWndProc(int code, WPARAM wParam, LPARAM lParam)
+{
+    if (code == HC_ACTION && IsStartMenuEnabled())
+    {
+        const CWPSTRUCT* cwp = reinterpret_cast<const CWPSTRUCT*>(lParam);
+        if (cwp && cwp->message == WM_MOUSEWHEEL)
+        {
+            static LONG s_logged = 0;
+            if (InterlockedIncrement(&s_logged) <= 20)
+            {
+                DS_Log(L"CallWnd wheel hwnd=%p", cwp->hwnd);
+            }
+            ForwardMenuWheel(cwp->wParam, cwp->lParam);
+        }
+    }
+    return CallNextHookEx(g_wheelCallWndHook, code, wParam, lParam);
 }
 
 void InstallStartMenuWheelForwarding()
@@ -277,9 +301,10 @@ void InstallStartMenuWheelForwarding()
     // child made Explorer unstable.
     SetWindowSubclass(host, MenuWheelSubclass, 0xD15, 0);
 
+    const DWORD threadId = GetWindowThreadProcessId(host, nullptr);
+
     if (!g_wheelGetMessageHook)
     {
-        const DWORD threadId = GetWindowThreadProcessId(host, nullptr);
         g_wheelGetMessageHook = SetWindowsHookExW(
             WH_GETMESSAGE,
             WheelGetMessageProc,
@@ -288,6 +313,20 @@ void InstallStartMenuWheelForwarding()
         DS_Log(
             L"Start menu wheel GetMessage hook=%p thread=%lu err=%lu",
             g_wheelGetMessageHook,
+            threadId,
+            GetLastError());
+    }
+
+    if (!g_wheelCallWndHook)
+    {
+        g_wheelCallWndHook = SetWindowsHookExW(
+            WH_CALLWNDPROC,
+            WheelCallWndProc,
+            nullptr,
+            threadId);
+        DS_Log(
+            L"Start menu wheel CallWnd hook=%p thread=%lu err=%lu",
+            g_wheelCallWndHook,
             threadId,
             GetLastError());
     }
