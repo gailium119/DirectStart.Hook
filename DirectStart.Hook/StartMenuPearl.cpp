@@ -12,6 +12,7 @@
  */
 
 #define PEARL_RT_COLOR_TYPE_START 282
+#define PEARL_LOGO_RES_ID 11703
 
 DWORD g_pearlGateTls = TLS_OUT_OF_INDEXES;
 ULONGLONG g_lastMenuCloseTick = 0;
@@ -87,17 +88,18 @@ HRESULT __fastcall Hook_Pearl_LoadColorizedImage(
     }
 
     if (pData && IsStartMenuEnabled() && pData->renderMode == 1 &&
-        pData->clrDesired == PEARL_RT_COLOR_TYPE_START && pData->fColorize)
+        pData->resId == PEARL_LOGO_RES_ID && pData->fColorize)
     {
-        // Bitmap layers are the logo/glyph art, not the accent background.
-        // Colorizing them recolors the transparent pixels as well. Keep the
-        // original resource id and alpha request, and only disable colorize so
-        // the white logo and its transparency are rendered unchanged.
+        // Resource 11703 is the white 32x32 Windows logo (the same PNG is in
+        // the ARM twinui.dll). It is painted several times with immersive
+        // color types 279/280/282; colorizing any of them tints the white
+        // glyph and its transparent background. Keep resId and alpha intact,
+        // only clear fColorize.
         pData->fColorize = 0;
         static LONG s_logged = 0;
         if (InterlockedIncrement(&s_logged) <= 8)
         {
-            DS_Log(L"Pearl RT: bitmap resId=%u needAlpha=%u colorize=0 clr=%d",
+            DS_Log(L"Pearl RT: logo resId=%u needAlpha=%u colorize=0 clr=%d",
                    pData->resId,
                    pData->fNeedAlpha,
                    pData->clrDesired);
@@ -127,9 +129,15 @@ HRESULT __fastcall Hook_Pearl_RepaintInternal(
     }
 
     if (layer && IsStartMenuEnabled() && layer->renderMode == 1 &&
-        layer->clrDesired == PEARL_RT_COLOR_TYPE_START && layer->fColorize)
+        layer->resId == PEARL_LOGO_RES_ID && layer->fColorize)
     {
         layer->fColorize = 0;
+        static LONG s_logoRepaint = 0;
+        if (InterlockedIncrement(&s_logoRepaint) <= 8)
+        {
+            DS_Log(L"Pearl RT: repaint logo res=%u colorize=0 clr=%d",
+                   layer->resId, layer->clrDesired);
+        }
     }
 
     return pOriginalPearl_RepaintInternal(pThis, hdc, target, pData);
