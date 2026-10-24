@@ -21,6 +21,8 @@
 DWORD g_pearlGateTls = TLS_OUT_OF_INDEXES;
 ULONGLONG g_lastMenuCloseTick = 0;
 static thread_local bool g_inPearlLoad = false;
+static thread_local bool g_inPearlFill = false;
+#define PEARL_FILL_RES_ID 11701
 
 static_assert(sizeof(PearlLayerRenderData) == 36, "PEARL_LAYER_RENDER_DATA size");
 
@@ -51,6 +53,11 @@ static DWORD GetRTStartMenuColor()
 
 DWORD __fastcall Hook_ImmersiveColor_GetColor(int type)
 {
+    if (g_inPearlFill)
+    {
+        return PEARL_COLOR_BGR;
+    }
+
     if (g_inPearlLoad &&
         (type == 279 || type == 280 || type == PEARL_RT_COLOR_TYPE_START))
     {
@@ -98,10 +105,22 @@ HRESULT __fastcall Hook_Pearl_LoadColorizedImage(
         }
     }
 
+    const bool fill = pData && IsStartMenuEnabled() &&
+        pData->renderMode == 1 && pData->resId == PEARL_FILL_RES_ID;
+    if (fill)
+    {
+        // 11701 is the white square baseplate. Force colorization so it fills
+        // the outer square with PEARL_COLOR_BGR instead of staying white.
+        pData->fColorize = 1;
+    }
+
     const bool previous = g_inPearlLoad;
+    const bool previousFill = g_inPearlFill;
     g_inPearlLoad = IsStartMenuEnabled() != 0;
+    g_inPearlFill = fill;
     const HRESULT hr =
         pOriginalPearl_LoadColorizedImage(pData, fFlag, phbmp);
+    g_inPearlFill = previousFill;
     g_inPearlLoad = previous;
     return hr;
 }
@@ -126,7 +145,19 @@ HRESULT __fastcall Hook_Pearl_RepaintInternal(
                layer->clrDesired);
     }
 
-    return pOriginalPearl_RepaintInternal(pThis, hdc, target, pData);
+    const bool fill = layer && IsStartMenuEnabled() &&
+        layer->renderMode == 1 && layer->resId == PEARL_FILL_RES_ID;
+    if (fill)
+    {
+        layer->fColorize = 1;
+    }
+
+    const bool previousFill = g_inPearlFill;
+    g_inPearlFill = fill;
+    const HRESULT hr =
+        pOriginalPearl_RepaintInternal(pThis, hdc, target, pData);
+    g_inPearlFill = previousFill;
+    return hr;
 }
 
 typedef void (__fastcall *Pearl_UpdateLayerVisibility_t)(void* pThis);
@@ -144,10 +175,10 @@ void __fastcall Hook_Pearl_UpdateLayerVisibility(void* pThis)
             reinterpret_cast<char*>(pThis) + 0x7C);
         if (state == 1 || state == 2)
         {
-            // Use one consistent visual for hover and press: the colorization
-            // square plus the press logo. The white baseplate and wash were
-            // lightening the requested #180053 outer color.
-            layers[0x00] = 0; // PVL_BASEPLATE
+            // Use one consistent visual for hover and press: the colorized
+            // baseplate fills the square with #180053, the colorization layer
+            // provides the frame, and the press layer draws the logo.
+            layers[0x00] = 1; // PVL_BASEPLATE
             layers[0x24] = 1; // PVL_COLORIZATION
             layers[0x48] = 0; // PVL_WASH
             layers[0x6C] = 0; // PVL_REST
