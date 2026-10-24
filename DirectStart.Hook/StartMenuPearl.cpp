@@ -23,7 +23,8 @@ ULONGLONG g_lastMenuCloseTick = 0;
 static thread_local bool g_inPearlLoad = false;
 static thread_local bool g_inPearlFill = false;
 static volatile LONG g_pearlState = 0;
-static LONG g_themeRefreshed = 0;
+static LONG g_lastThemeState = -1;
+static thread_local bool g_inThemeRefresh = false;
 #define PEARL_FILL_RES_ID 11701
 
 static_assert(sizeof(PearlLayerRenderData) == 36, "PEARL_LAYER_RENDER_DATA size");
@@ -268,17 +269,6 @@ void __fastcall Hook_CPearl_OnStartMenuShownOnPearl(void* pThis, bool fOpen, HWN
     if (InterlockedIncrement(&s_logged) <= 40)
         DS_Log(L"Pearl RT: OnStartMenuShownOnPearl(%d) pearl=%p", fOpen ? 1 : 0, pThis);
 
-    // The pearl bitmaps are often built before d3d11 is loaded, so the
-    // s_LoadOptionallyColorizedImage hook never sees them. Refresh once after
-    // the first non-rest state; this also covers hover before the menu opens.
-    if (pThis && IsStartMenuEnabled() &&
-        InterlockedExchange(&g_themeRefreshed, 1) == 0 &&
-        pOriginalCPearl_UpdateTheme)
-    {
-        DS_Log(L"Pearl RT: refreshing pearl theme for logo colorize fix");
-        pOriginalCPearl_UpdateTheme(pThis);
-    }
-
     pOriginalCPearl_OnStartMenuShownOnPearl(pThis, fOpen, pphwnd);
 }
 
@@ -316,12 +306,14 @@ long __fastcall Hook_CPearl_UpdateState(void* pThis, int state, bool fAnimate)
     const long result =
         pOriginalCPearl_UpdateState(pThis, effective, fAnimate);
 
-    if (effective != 0 && pThis && IsStartMenuEnabled() &&
-        InterlockedExchange(&g_themeRefreshed, 1) == 0 &&
-        pOriginalCPearl_UpdateTheme)
+    if (pThis && IsStartMenuEnabled() && !g_inThemeRefresh &&
+        g_pearlState != g_lastThemeState && pOriginalCPearl_UpdateTheme)
     {
-        DS_Log(L"Pearl RT: refreshing pearl theme on first active state");
+        g_lastThemeState = g_pearlState;
+        g_inThemeRefresh = true;
+        DS_Log(L"Pearl RT: refreshing pearl theme for state=%ld", g_pearlState);
         pOriginalCPearl_UpdateTheme(pThis);
+        g_inThemeRefresh = false;
     }
     return result;
 }
