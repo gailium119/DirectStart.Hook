@@ -1500,8 +1500,8 @@ BOOL DS_HookSymbols(
 
     if (!pending.empty())
     {
-        std::wstring pdbPath = EnsurePdb(module);
-        std::string pdbAnsi = ToAnsi(pdbPath);
+        const std::wstring pdbPath = EnsurePdb(module);
+        const std::string pdbAnsi = ToAnsi(pdbPath);
         if (!pdbPath.empty() && !pdbAnsi.empty())
         {
             std::vector<SymbolRequest> requests;
@@ -1536,28 +1536,11 @@ BOOL DS_HookSymbols(
                 return count;
             };
 
-            // Local PDB was preferred above. If it produced nothing, assume it
-            // is unreadable/mismatched and download a fresh copy, then retry.
-            if (countResolved() == 0 && !requests.empty())
-            {
-                DS_Log(
-                    L"%s: local PDB yielded no symbols; re-downloading",
-                    section.c_str());
-                const std::wstring refreshed = EnsurePdb(module, true);
-                const std::string refreshedAnsi = ToAnsi(refreshed);
-                if (!refreshed.empty() && !refreshedAnsi.empty())
-                {
-                    pdbPath = refreshed;
-                    pdbAnsi = refreshedAnsi;
-                    ResolveSymbolGroup(
-                        pdbAnsi,
-                        imageSize,
-                        requests,
-                        rvas,
-                        resolved,
-                        matchedNames);
-                }
-            }
+            // Do not re-download just because this build's PDB lacks some
+            // symbols: a missing symbol means the DLL build does not export or
+            // contain that function, not that the PDB is unreadable.
+            // Re-download only happens in EnsurePdb when the local file is
+            // missing or fails the MSF validity check.
 
             // A few entries carry an alternative (renamed) symbol name.
             for (const PendingSymbol& item : pending)
