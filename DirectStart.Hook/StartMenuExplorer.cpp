@@ -181,59 +181,25 @@ static HWND FindMenuHostFromWindow(HWND hwnd)
     return nullptr;
 }
 
-bool ForwardMenuWheel(WPARAM wParam, LPARAM lParam, HWND source)
+static HWND FindListAncestor(HWND hwnd)
 {
-    HWND host = FindMenuHostFromWindow(source);
-    if (!host)
+    for (HWND current = hwnd; current; current = GetParent(current))
     {
-        host = FindWindowW(L"DV2ControlHost", nullptr);
-    }
-
-    static LONG s_enterLogged = 0;
-    if (InterlockedIncrement(&s_enterLogged) <= 20)
-    {
-        DS_Log(
-            L"ForwardMenuWheel source=%p host=%p",
-            source,
-            host);
-    }
-
-    if (host && g_pDeskHost && pfnCDesktopHost_IsDialogMessage)
-    {
-        MSG msg = {};
-        msg.hwnd = host;
-        msg.message = WM_MOUSEWHEEL;
-        msg.wParam = wParam;
-        msg.lParam = lParam;
-        msg.time = GetTickCount();
-        msg.pt.x = static_cast<LONG>(static_cast<SHORT>(LOWORD(lParam)));
-        msg.pt.y = static_cast<LONG>(static_cast<SHORT>(HIWORD(lParam)));
-
-        const int handled =
-            pfnCDesktopHost_IsDialogMessage(g_pDeskHost, &msg);
-        if (handled)
+        wchar_t className[64] = {};
+        if (GetClassNameW(current, className, _countof(className)) &&
+            wcscmp(className, L"SysListView32") == 0)
         {
-            static LONG s_nativeLogged = 0;
-            if (InterlockedIncrement(&s_nativeLogged) <= 20)
-            {
-                DS_Log(
-                    L"Start menu wheel handled by CDesktopHost::_IsDialogMessage host=%p",
-                    host);
-            }
-            return true;
+            return current;
         }
     }
+    return nullptr;
+}
 
-    HWND list = host ? FindVisibleAllAppsList(host) : nullptr;
-    if (!list)
+static bool ScrollSysListView(HWND list, int delta)
+{
+    if (!list || delta == 0)
     {
         return false;
-    }
-
-    const int delta = static_cast<short>(HIWORD(wParam));
-    if (delta == 0)
-    {
-        return true;
     }
 
     const int notches = delta / WHEEL_DELTA;
@@ -254,6 +220,67 @@ bool ForwardMenuWheel(WPARAM wParam, LPARAM lParam, HWND source)
         DS_Log(L"Start menu wheel -> list=%p delta=%d", list, delta);
     }
     return true;
+}
+
+bool ForwardMenuWheel(WPARAM wParam, LPARAM lParam, HWND source)
+{
+    HWND host = FindMenuHostFromWindow(source);
+    if (!host)
+    {
+        host = FindWindowW(L"DV2ControlHost", nullptr);
+    }
+
+    const int delta = static_cast<short>(HIWORD(wParam));
+    static LONG s_enterLogged = 0;
+    if (InterlockedIncrement(&s_enterLogged) <= 20)
+    {
+        DS_Log(
+            L"ForwardMenuWheel source=%p host=%p delta=%d",
+            source,
+            host,
+            delta);
+    }
+
+    // The wheel message may be sent to the host or to a sibling pane, but the
+    // cursor is over the actual list. Resolve the list directly from the
+    // screen point instead of trusting a possibly stale DV2ControlHost.
+    const POINT point = {
+        static_cast<SHORT>(LOWORD(lParam)),
+        static_cast<SHORT>(HIWORD(lParam))};
+    HWND underCursor = WindowFromPoint(point);
+    HWND pointList = FindListAncestor(underCursor);
+    if (pointList && ScrollSysListView(pointList, delta))
+    {
+        return true;
+    }
+
+    if (host && g_pDeskHost && pfnCDesktopHost_IsDialogMessage)
+    {
+        MSG msg = {};
+        msg.hwnd = host;
+        msg.message = WM_MOUSEWHEEL;
+        msg.wParam = wParam;
+        msg.lParam = lParam;
+        msg.time = GetTickCount();
+        msg.pt = point;
+
+        const int handled =
+            pfnCDesktopHost_IsDialogMessage(g_pDeskHost, &msg);
+        if (handled)
+        {
+            static LONG s_nativeLogged = 0;
+            if (InterlockedIncrement(&s_nativeLogged) <= 20)
+            {
+                DS_Log(
+                    L"Start menu wheel handled by CDesktopHost::_IsDialogMessage host=%p",
+                    host);
+            }
+            return true;
+        }
+    }
+
+    HWND list = host ? FindVisibleAllAppsList(host) : nullptr;
+    return ScrollSysListView(list, delta);
 }
 
 static LRESULT CALLBACK MenuWheelSubclass(
