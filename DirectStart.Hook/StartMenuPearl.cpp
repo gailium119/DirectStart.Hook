@@ -16,7 +16,6 @@
 
 DWORD g_pearlGateTls = TLS_OUT_OF_INDEXES;
 ULONGLONG g_lastMenuCloseTick = 0;
-static thread_local bool g_inLogoColorize = false;
 
 static_assert(sizeof(PearlLayerRenderData) == 36, "PEARL_LAYER_RENDER_DATA size");
 
@@ -40,6 +39,18 @@ static DWORD GetRTStartMenuColor()
     {
         return value;
     }
+
+    // The immersive color type 0 is not the visible taskbar accent on all 8.1
+    // themes (it can be a dark red). The colorization layer must use the same
+    // accent that DWM paints behind the start button.
+    DWORD colorization = 0;
+    BOOL opaque = FALSE;
+    if (SUCCEEDED(DwmGetColorizationColor(&colorization, &opaque)) &&
+        (colorization >> 24) != 0)
+    {
+        return colorization;
+    }
+
     return pOriginalImmersiveColor_GetColor
         ? pOriginalImmersiveColor_GetColor(0)
         : 0xFF000000;
@@ -47,15 +58,6 @@ static DWORD GetRTStartMenuColor()
 
 DWORD __fastcall Hook_ImmersiveColor_GetColor(int type)
 {
-    if (g_inLogoColorize)
-    {
-        // The colorization pass must keep fColorize=1 so the PNG alpha is
-        // honoured; clearing it makes the transparent background black.
-        // Instead, give the logo resource a white color, preserving both the
-        // white glyph and its transparency.
-        return 0xFFFFFFFF;
-    }
-
     DWORD result = pOriginalImmersiveColor_GetColor(type);
     if (type == PEARL_RT_COLOR_TYPE_START && IsStartMenuEnabled())
     {
@@ -97,24 +99,7 @@ HRESULT __fastcall Hook_Pearl_LoadColorizedImage(
         }
     }
 
-    const bool logo = pData && IsStartMenuEnabled() &&
-        pData->renderMode == 1 && pData->resId == PEARL_LOGO_RES_ID;
-    if (logo)
-    {
-        static LONG s_logged = 0;
-        if (InterlockedIncrement(&s_logged) <= 8)
-        {
-            DS_Log(L"Pearl RT: logo colorize white res=%u needAlpha=%u clr=%d",
-                   pData->resId, pData->fNeedAlpha, pData->clrDesired);
-        }
-    }
-
-    const bool previous = g_inLogoColorize;
-    g_inLogoColorize = logo;
-    const HRESULT hr =
-        pOriginalPearl_LoadColorizedImage(pData, fFlag, phbmp);
-    g_inLogoColorize = previous;
-    return hr;
+    return pOriginalPearl_LoadColorizedImage(pData, fFlag, phbmp);
 }
 
 typedef HRESULT (__fastcall *Pearl_RepaintInternal_t)(
@@ -137,24 +122,7 @@ HRESULT __fastcall Hook_Pearl_RepaintInternal(
                layer->clrDesired);
     }
 
-    const bool logo = layer && IsStartMenuEnabled() &&
-        layer->renderMode == 1 && layer->resId == PEARL_LOGO_RES_ID;
-    if (logo)
-    {
-        static LONG s_logoRepaint = 0;
-        if (InterlockedIncrement(&s_logoRepaint) <= 8)
-        {
-            DS_Log(L"Pearl RT: repaint logo white res=%u clr=%d",
-                   layer->resId, layer->clrDesired);
-        }
-    }
-
-    const bool previous = g_inLogoColorize;
-    g_inLogoColorize = logo;
-    const HRESULT hr =
-        pOriginalPearl_RepaintInternal(pThis, hdc, target, pData);
-    g_inLogoColorize = previous;
-    return hr;
+    return pOriginalPearl_RepaintInternal(pThis, hdc, target, pData);
 }
 
 typedef void (__fastcall *Pearl_UpdateLayerVisibility_t)(void* pThis);
