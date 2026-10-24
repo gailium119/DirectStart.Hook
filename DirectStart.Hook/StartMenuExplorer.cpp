@@ -280,16 +280,10 @@ void InstallStartMenuWheelForwarding()
     if (!g_wheelGetMessageHook)
     {
         const DWORD threadId = GetWindowThreadProcessId(host, nullptr);
-        HMODULE self = nullptr;
-        GetModuleHandleExW(
-            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-                GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-            reinterpret_cast<LPCWSTR>(&InstallStartMenuWheelForwarding),
-            &self);
         g_wheelGetMessageHook = SetWindowsHookExW(
             WH_GETMESSAGE,
             WheelGetMessageProc,
-            self,
+            nullptr,
             threadId);
         DS_Log(
             L"Start menu wheel GetMessage hook=%p thread=%lu err=%lu",
