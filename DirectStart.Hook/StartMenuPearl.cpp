@@ -1,12 +1,16 @@
 #include "StartMenuHooks.h"
 
 /*
- * Pearl colorization is deliberately left to the OS. The original mod's
- * experimental color/fill path tinted the transparent parts of the start
- * button logo and made the inner square render as a separate layer. The
- * hooks stay in the symbol table (so the rest of the start-menu patch is
- * unchanged) but simply forward to the original implementations.
+ * The colorized-image/layer-visibility hacks are left as pass-through: they
+ * filled transparent pixels and hid a pearl layer, which tinted the Windows
+ * logo and produced a visible inner square.
+ *
+ * The start-button background color is still supplied through
+ * CImmersiveColor::GetColor(282); that is what the OS uses for the accent
+ * square, and without it the square falls back to the theme's gray.
  */
+
+#define PEARL_RT_COLOR_TYPE_START 282
 
 DWORD g_pearlGateTls = TLS_OUT_OF_INDEXES;
 ULONGLONG g_lastMenuCloseTick = 0;
@@ -16,8 +20,34 @@ static_assert(sizeof(PearlLayerRenderData) == 36, "PEARL_LAYER_RENDER_DATA size"
 typedef DWORD (__fastcall *ImmersiveColor_GetColor_t)(int type);
 ImmersiveColor_GetColor_t pOriginalImmersiveColor_GetColor = nullptr;
 
+static DWORD GetRTStartMenuColor()
+{
+    DWORD value = 0;
+    DWORD type = 0;
+    DWORD cb = sizeof(value);
+    if (SHGetValueW(
+            HKEY_LOCAL_MACHINE,
+            L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartMenu\\Colors",
+            L"OverrideColor",
+            &type,
+            &value,
+            &cb) == ERROR_SUCCESS &&
+        type == REG_DWORD &&
+        cb == sizeof(value))
+    {
+        return value;
+    }
+    return pOriginalImmersiveColor_GetColor
+        ? pOriginalImmersiveColor_GetColor(0)
+        : 0xFF000000;
+}
+
 DWORD __fastcall Hook_ImmersiveColor_GetColor(int type)
 {
+    if (type == PEARL_RT_COLOR_TYPE_START && IsStartMenuEnabled())
+    {
+        return GetRTStartMenuColor();
+    }
     return pOriginalImmersiveColor_GetColor(type);
 }
 
