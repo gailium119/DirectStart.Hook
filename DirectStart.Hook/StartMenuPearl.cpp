@@ -260,6 +260,12 @@ long __fastcall Hook_CPearl_UpdateState(void* pThis, int state, bool fAnimate)
 
             effective = 1;
         }
+        else if (!menuOpen && state == 1)
+        {
+            // Hover should use the pressed visual (blue square + purple logo),
+            // not the lighter hover state.
+            effective = 2;
+        }
     }
     static LONG s_logged = 0;
     if (InterlockedIncrement(&s_logged) <= 80)
