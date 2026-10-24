@@ -245,6 +245,26 @@ static LRESULT CALLBACK MenuWheelSubclass(
     return DefSubclassProc(hwnd, uMsg, wParam, lParam);
 }
 
+static HHOOK g_wheelGetMessageHook = nullptr;
+
+static LRESULT CALLBACK WheelGetMessageProc(int code, WPARAM wParam, LPARAM lParam)
+{
+    if (code == HC_ACTION && IsStartMenuEnabled())
+    {
+        MSG* msg = reinterpret_cast<MSG*>(lParam);
+        if (msg && msg->message == WM_MOUSEWHEEL)
+        {
+            HWND host = FindWindowW(L"DV2ControlHost", nullptr);
+            if (host && IsWindowVisible(host) &&
+                ForwardMenuWheel(msg->wParam, msg->lParam))
+            {
+                msg->message = WM_NULL;
+            }
+        }
+    }
+    return CallNextHookEx(g_wheelGetMessageHook, code, wParam, lParam);
+}
+
 void InstallStartMenuWheelForwarding()
 {
     HWND host = FindWindowW(L"DV2ControlHost", nullptr);
@@ -256,6 +276,28 @@ void InstallStartMenuWheelForwarding()
     // Only subclass the top-level menu window; subclassing every DirectUI
     // child made Explorer unstable.
     SetWindowSubclass(host, MenuWheelSubclass, 0xD15, 0);
+
+    if (!g_wheelGetMessageHook)
+    {
+        const DWORD threadId = GetWindowThreadProcessId(host, nullptr);
+        HMODULE self = nullptr;
+        GetModuleHandleExW(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            reinterpret_cast<LPCWSTR>(&InstallStartMenuWheelForwarding),
+            &self);
+        g_wheelGetMessageHook = SetWindowsHookExW(
+            WH_GETMESSAGE,
+            WheelGetMessageProc,
+            self,
+            threadId);
+        DS_Log(
+            L"Start menu wheel GetMessage hook=%p thread=%lu err=%lu",
+            g_wheelGetMessageHook,
+            threadId,
+            GetLastError());
+    }
+
     static LONG s_logged = 0;
     if (InterlockedIncrement(&s_logged) <= 8)
     {
