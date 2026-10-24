@@ -142,20 +142,21 @@ void __fastcall Hook_Pearl_UpdateLayerVisibility(void* pThis)
             reinterpret_cast<char*>(pThis) + 0x1C);
         BYTE* layers = reinterpret_cast<BYTE*>(
             reinterpret_cast<char*>(pThis) + 0x7C);
-        if (state == 1)
+        if (state == 1 || state == 2)
         {
-            // Make hover use exactly the pressed visual: blue square plus
-            // purple logo.
-            layers[0x00] = 1; // PVL_BASEPLATE
+            // Use one consistent visual for hover and press: the colorization
+            // square plus the press logo. The white baseplate and wash were
+            // lightening the requested #180053 outer color.
+            layers[0x00] = 0; // PVL_BASEPLATE
             layers[0x24] = 1; // PVL_COLORIZATION
-            layers[0x48] = 1; // PVL_WASH
+            layers[0x48] = 0; // PVL_WASH
             layers[0x6C] = 0; // PVL_REST
             layers[0x90] = 0; // PVL_HOVERSELECTED
             layers[0xB4] = 1; // PVL_PRESS
             static LONG s_hoverFixed = 0;
             if (InterlockedIncrement(&s_hoverFixed) <= 8)
             {
-                DS_Log(L"Pearl RT: vis hover mirrors pressed");
+                DS_Log(L"Pearl RT: vis colored square only");
             }
         }
     }
