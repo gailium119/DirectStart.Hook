@@ -122,6 +122,83 @@ static HWND FindDescendantWindow(HWND parent, const wchar_t* wantedClass)
     return nullptr;
 }
 
+static bool IsUnderClass(HWND hwnd, const wchar_t* wantedClass)
+{
+    for (HWND parent = hwnd; parent; parent = GetParent(parent))
+    {
+        wchar_t className[64] = {};
+        if (GetClassNameW(parent, className, _countof(className)) &&
+            wcscmp(className, wantedClass) == 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+static HWND FindVisibleAllAppsList(HWND parent)
+{
+    HWND child = FindWindowExW(parent, nullptr, nullptr, nullptr);
+    while (child)
+    {
+        wchar_t className[64] = {};
+        if (GetClassNameW(child, className, _countof(className)) &&
+            wcscmp(className, L"SysListView32") == 0 &&
+            IsWindowVisible(child) &&
+            !IsUnderClass(child, L"DesktopDestinationList"))
+        {
+            RECT rc = {};
+            if (GetWindowRect(child, &rc) && rc.bottom > rc.top)
+            {
+                return child;
+            }
+        }
+        HWND found = FindVisibleAllAppsList(child);
+        if (found)
+        {
+            return found;
+        }
+        child = FindWindowExW(parent, child, nullptr, nullptr);
+    }
+    return nullptr;
+}
+
+bool ForwardMenuWheel(WPARAM wParam, LPARAM lParam)
+{
+    (void)lParam;
+    HWND host = FindWindowW(L"DV2ControlHost", nullptr);
+    HWND list = host ? FindVisibleAllAppsList(host) : nullptr;
+    if (!list)
+    {
+        return false;
+    }
+
+    const int delta = static_cast<short>(HIWORD(wParam));
+    if (delta == 0)
+    {
+        return true;
+    }
+
+    const int notches = delta / WHEEL_DELTA;
+    const int pixels = notches * 60;
+    SendMessageW(list, LVM_SCROLL, 0, -pixels);
+
+    const WPARAM scroll =
+        MAKEWPARAM(delta > 0 ? SB_LINEUP : SB_LINEDOWN, 0);
+    const int lines = (abs(delta) / WHEEL_DELTA) * 3;
+    for (int i = 0; i < lines; ++i)
+    {
+        SendMessageW(list, WM_VSCROLL, scroll, 0);
+    }
+
+    static LONG s_logged = 0;
+    if (InterlockedIncrement(&s_logged) <= 20)
+    {
+        DS_Log(L"Start menu wheel -> list=%p delta=%d", list, delta);
+    }
+    return true;
+}
+
 static LRESULT CALLBACK MenuWheelSubclass(
     HWND hwnd,
     UINT uMsg,
@@ -130,42 +207,10 @@ static LRESULT CALLBACK MenuWheelSubclass(
     UINT_PTR,
     DWORD_PTR)
 {
-    if (uMsg == WM_MOUSEWHEEL && IsStartMenuEnabled())
+    if (uMsg == WM_MOUSEWHEEL && IsStartMenuEnabled() &&
+        ForwardMenuWheel(wParam, lParam))
     {
-        HWND host = FindWindowW(L"DV2ControlHost", nullptr);
-        HWND list = host
-            ? FindDescendantWindow(host, L"SysListView32")
-            : nullptr;
-        if (list)
-        {
-            const int delta =
-                static_cast<short>(HIWORD(wParam));
-            if (delta != 0)
-            {
-                const int lines =
-                    (abs(delta) / WHEEL_DELTA) * 3;
-                const WPARAM scroll =
-                    MAKEWPARAM(delta > 0 ? SB_LINEUP : SB_LINEDOWN, 0);
-                for (int i = 0; i < lines; ++i)
-                {
-                    SendMessageW(list, WM_VSCROLL, scroll, 0);
-                }
-            }
-            return 0;
-        }
-
-        if (hwnd != list)
-        {
-            const POINT point = {
-                static_cast<SHORT>(LOWORD(lParam)),
-                static_cast<SHORT>(HIWORD(lParam))};
-            HWND target = WindowFromPoint(point);
-            if (target && target != hwnd &&
-                host && IsChild(host, target))
-            {
-                return SendMessageW(target, uMsg, wParam, lParam);
-            }
-        }
+        return 0;
     }
     return DefSubclassProc(hwnd, uMsg, wParam, lParam);
 }
@@ -337,6 +382,11 @@ LRESULT __fastcall Hook_CTray_v_WndProc(void* pThis, HWND hWnd, UINT uMsg, WPARA
 {
     if (IsStartMenuEnabled())
     {
+        if (uMsg == WM_MOUSEWHEEL && ForwardMenuWheel(wParam, lParam))
+        {
+            return 0;
+        }
+
         switch (uMsg)
         {
             case 0x40D: 
