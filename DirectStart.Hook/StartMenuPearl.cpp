@@ -257,8 +257,9 @@ long __fastcall Hook_CPearl_UpdateState(void* pThis, int state, bool fAnimate)
         }
         else if (!menuOpen && state == 2)
         {
-
-            effective = 1;
+            // Keep the pressed visual while the mouse is held down; mapping it
+            // back to 1 made the square disappear until the button was released.
+            effective = 2;
         }
         else if (!menuOpen && state == 1)
         {
