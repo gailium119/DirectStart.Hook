@@ -12,9 +12,11 @@
  */
 
 #define PEARL_RT_COLOR_TYPE_START 282
-// Both the colorized-image loader and the repaint path consume the color as
-// COLORREF (0x00BBGGRR) here; #4B0082 -> R=4B, G=00, B=82.
+// s_LoadOptionallyColorizedImage writes the color into a 32-bpp DIB as
+// B,G,R,A, so it consumes COLORREF (0x00BBGGRR). The repaint/fill path
+// consumes ARGB (0xAARRGGBB). Both values below are #4B0082.
 #define PEARL_COLOR_BGR  0x0082004Bu
+#define PEARL_COLOR_ARGB 0xFF4B0082u
 #define PEARL_LOGO_RES_ID 11703
 
 DWORD g_pearlGateTls = TLS_OUT_OF_INDEXES;
@@ -44,8 +46,8 @@ static DWORD GetRTStartMenuColor()
         return value;
     }
 
-    // The repaint path also consumes this as COLORREF.
-    return PEARL_COLOR_BGR;
+    // ARGB for the repaint/fill path. The loader path below converts to BGR.
+    return PEARL_COLOR_ARGB;
 }
 
 DWORD __fastcall Hook_ImmersiveColor_GetColor(int type)
