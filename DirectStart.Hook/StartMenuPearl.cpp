@@ -217,6 +217,20 @@ void __fastcall Hook_CPearl_OnStartMenuShownOnPearl(void* pThis, bool fOpen, HWN
     static LONG s_logged = 0;
     if (InterlockedIncrement(&s_logged) <= 40)
         DS_Log(L"Pearl RT: OnStartMenuShownOnPearl(%d) pearl=%p", fOpen ? 1 : 0, pThis);
+
+    // The pearl bitmaps are often built before d3d11 is loaded, so the
+    // s_LoadOptionallyColorizedImage hook never sees them. Refresh the theme
+    // once after all hooks are live; this rebuilds the pearl resources and
+    // lets the logo-resource fColorize fix apply.
+    static LONG s_themeRefreshed = 0;
+    if (pThis && IsStartMenuEnabled() &&
+        InterlockedExchange(&s_themeRefreshed, 1) == 0 &&
+        pOriginalCPearl_UpdateTheme)
+    {
+        DS_Log(L"Pearl RT: refreshing pearl theme for logo colorize fix");
+        pOriginalCPearl_UpdateTheme(pThis);
+    }
+
     pOriginalCPearl_OnStartMenuShownOnPearl(pThis, fOpen, pphwnd);
 }
 

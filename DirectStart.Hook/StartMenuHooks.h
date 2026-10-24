@@ -112,6 +112,7 @@ extern Pearl_RepaintInternal_t pOriginalPearl_RepaintInternal;
 extern Pearl_UpdateLayerVisibility_t pOriginalPearl_UpdateLayerVisibility;
 extern CPearl_UpdateState_t pOriginalCPearl_UpdateState;
 extern CPearl_OnStartMenuShownOnPearl_t pOriginalCPearl_OnStartMenuShownOnPearl;
+extern HRESULT (__fastcall *pOriginalCPearl_UpdateTheme)(void* pPearl);
 
 inline BOOL IsStartMenuEnabled()
 {
