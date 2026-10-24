@@ -12,11 +12,11 @@
  */
 
 #define PEARL_RT_COLOR_TYPE_START 282
-// s_LoadOptionallyColorizedImage writes the color into a 32-bpp DIB as
-// B,G,R,A, so it consumes COLORREF (0x00BBGGRR). The repaint/fill path
-// consumes ARGB (0xAARRGGBB). Blue test: #0000FF.
+// Both paths consume the value as COLORREF (0x00BBGGRR). The previous
+// repaint value 0xFF0000FF was read as BGR and rendered red; use the same
+// BGR blue for both. #0000FF -> R=00, G=00, B=FF.
 #define PEARL_COLOR_BGR  0x00FF0000u
-#define PEARL_COLOR_ARGB 0xFF0000FFu
+#define PEARL_COLOR_ARGB 0x00FF0000u
 #define PEARL_LOGO_RES_ID 11703
 
 DWORD g_pearlGateTls = TLS_OUT_OF_INDEXES;
