@@ -34,9 +34,21 @@ struct LauncherSettings_t
     HWND _hwndForScaleFactors;
 };
 
+struct PearlLayerLayoutProperties
+{
+    int layoutPos;   // +0x00
+    RECT rc;         // +0x04
+    int fVisible;    // +0x14
+};
+
 struct PearlLayerRenderData
 {
-    int f[9];
+    PearlLayerLayoutProperties layout; // +0x00
+    int renderMode;                    // +0x18: 0 = fill rect, 1 = bitmap
+    WORD resId;                        // +0x1C
+    BYTE fNeedAlpha;                   // +0x1E
+    BYTE fColorize;                    // +0x1F
+    int clrDesired;                    // +0x20: IMMERSIVE_COLOR_TYPE
 };
 static_assert(sizeof(PearlLayerRenderData) == 36, "PEARL_LAYER_RENDER_DATA size");
 
