@@ -1,4 +1,5 @@
 #include "StartMenuHooks.h"
+#include <intrin.h>
 
 /*
  * The colorized-image/layer-visibility hacks are left as pass-through: they
@@ -44,11 +45,18 @@ static DWORD GetRTStartMenuColor()
 
 DWORD __fastcall Hook_ImmersiveColor_GetColor(int type)
 {
+    DWORD result = pOriginalImmersiveColor_GetColor(type);
     if (type == PEARL_RT_COLOR_TYPE_START && IsStartMenuEnabled())
     {
-        return GetRTStartMenuColor();
+        result = GetRTStartMenuColor();
+        static LONG s_logged = 0;
+        if (InterlockedIncrement(&s_logged) <= 16)
+        {
+            DS_Log(L"Pearl RT: GetColor(282) -> 0x%08X caller=%p",
+                   result, _ReturnAddress());
+        }
     }
-    return pOriginalImmersiveColor_GetColor(type);
+    return result;
 }
 
 typedef HRESULT (__fastcall *Pearl_LoadColorizedImage_t)(
@@ -58,6 +66,26 @@ Pearl_LoadColorizedImage_t pOriginalPearl_LoadColorizedImage = nullptr;
 HRESULT __fastcall Hook_Pearl_LoadColorizedImage(
     PearlLayerRenderData* pData, bool fFlag, HBITMAP* phbmp)
 {
+    static LONG s_entry = 0;
+    if (InterlockedIncrement(&s_entry) <= 32)
+    {
+        if (pData)
+        {
+            DS_Log(L"Pearl RT: LoadColorized mode=%d res=%u needA=%u colorize=%u clr=%d size=%dx%d",
+                   pData->renderMode,
+                   pData->resId,
+                   pData->fNeedAlpha,
+                   pData->fColorize,
+                   pData->clrDesired,
+                   pData->layout.rc.right - pData->layout.rc.left,
+                   pData->layout.rc.bottom - pData->layout.rc.top);
+        }
+        else
+        {
+            DS_Log(L"Pearl RT: LoadColorized pData=null");
+        }
+    }
+
     if (pData && IsStartMenuEnabled() && pData->renderMode == 1 &&
         pData->clrDesired == PEARL_RT_COLOR_TYPE_START && pData->fColorize)
     {
@@ -85,6 +113,25 @@ Pearl_RepaintInternal_t pOriginalPearl_RepaintInternal = nullptr;
 HRESULT __fastcall Hook_Pearl_RepaintInternal(
     void* pThis, HDC hdc, int target, const void* pData)
 {
+    auto* layer = const_cast<PearlLayerRenderData*>(
+        reinterpret_cast<const PearlLayerRenderData*>(pData));
+    static LONG s_logged = 0;
+    if (layer && InterlockedIncrement(&s_logged) <= 16)
+    {
+        DS_Log(L"Pearl RT: repaint mode=%d res=%u needA=%u colorize=%u clr=%d",
+               layer->renderMode,
+               layer->resId,
+               layer->fNeedAlpha,
+               layer->fColorize,
+               layer->clrDesired);
+    }
+
+    if (layer && IsStartMenuEnabled() && layer->renderMode == 1 &&
+        layer->clrDesired == PEARL_RT_COLOR_TYPE_START && layer->fColorize)
+    {
+        layer->fColorize = 0;
+    }
+
     return pOriginalPearl_RepaintInternal(pThis, hdc, target, pData);
 }
 
@@ -94,6 +141,23 @@ Pearl_UpdateLayerVisibility_t pOriginalPearl_UpdateLayerVisibility = nullptr;
 void __fastcall Hook_Pearl_UpdateLayerVisibility(void* pThis)
 {
     pOriginalPearl_UpdateLayerVisibility(pThis);
+
+    static LONG s_logged = 0;
+    if (pThis && InterlockedIncrement(&s_logged) <= 16)
+    {
+        const int state = *reinterpret_cast<int*>(
+            reinterpret_cast<char*>(pThis) + 0x1C);
+        const BYTE* layers = reinterpret_cast<BYTE*>(
+            reinterpret_cast<char*>(pThis) + 0x7C);
+        DS_Log(L"Pearl RT: vis state=%d L0=%d L1=%d L2=%d L3=%d L4=%d L5=%d",
+               state,
+               layers[0x00],
+               layers[0x24],
+               layers[0x48],
+               layers[0x6C],
+               layers[0x90],
+               layers[0xB4]);
+    }
 }
 
 // Servicing builds may ship without usable PDBs. These patterns keep opcodes and
