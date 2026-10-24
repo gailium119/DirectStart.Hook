@@ -298,7 +298,7 @@ bool ForwardMenuWheel(WPARAM wParam, LPARAM lParam, HWND source)
     if (host && g_pDeskHost && pfnCDesktopHost_IsDialogMessage)
     {
         MSG msg = {};
-        msg.hwnd = host;
+        msg.hwnd = source ? source : host;
         msg.message = WM_MOUSEWHEEL;
         msg.wParam = wParam;
         msg.lParam = lParam;
