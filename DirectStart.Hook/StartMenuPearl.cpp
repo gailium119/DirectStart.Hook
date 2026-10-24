@@ -12,14 +12,16 @@
  */
 
 #define PEARL_RT_COLOR_TYPE_START 282
-// Pearl colors are consumed in COLORREF byte order (R in the low byte):
-// 0x00BBGGRR. This value is #4B0082 (dark purple/indigo).
-#define PEARL_DEFAULT_COLOR 0xFF82004Bu
+// s_LoadOptionallyColorizedImage writes the color into a 32-bpp DIB as
+// B,G,R,A, so it consumes COLORREF (0x00BBGGRR). The repaint/fill path
+// consumes ARGB (0xAARRGGBB). Both values below are #4B0082.
+#define PEARL_COLOR_BGR  0x0082004Bu
+#define PEARL_COLOR_ARGB 0xFF4B0082u
 #define PEARL_LOGO_RES_ID 11703
 
 DWORD g_pearlGateTls = TLS_OUT_OF_INDEXES;
 ULONGLONG g_lastMenuCloseTick = 0;
-static thread_local bool g_inPearlPaint = false;
+static thread_local bool g_inPearlLoad = false;
 
 static_assert(sizeof(PearlLayerRenderData) == 36, "PEARL_LAYER_RENDER_DATA size");
 
@@ -44,18 +46,16 @@ static DWORD GetRTStartMenuColor()
         return value;
     }
 
-    // Use a fixed dark-purple default instead of the DWM/immersive color.
-    // The HKLM OverrideColor value above still takes precedence for custom
-    // colors.
-    return PEARL_DEFAULT_COLOR;
+    // ARGB for the repaint/fill path. The loader path below converts to BGR.
+    return PEARL_COLOR_ARGB;
 }
 
 DWORD __fastcall Hook_ImmersiveColor_GetColor(int type)
 {
-    if (g_inPearlPaint &&
+    if (g_inPearlLoad &&
         (type == 279 || type == 280 || type == PEARL_RT_COLOR_TYPE_START))
     {
-        return PEARL_DEFAULT_COLOR;
+        return PEARL_COLOR_BGR;
     }
 
     DWORD result = pOriginalImmersiveColor_GetColor(type);
@@ -99,11 +99,11 @@ HRESULT __fastcall Hook_Pearl_LoadColorizedImage(
         }
     }
 
-    const bool previous = g_inPearlPaint;
-    g_inPearlPaint = IsStartMenuEnabled() != 0;
+    const bool previous = g_inPearlLoad;
+    g_inPearlLoad = IsStartMenuEnabled() != 0;
     const HRESULT hr =
         pOriginalPearl_LoadColorizedImage(pData, fFlag, phbmp);
-    g_inPearlPaint = previous;
+    g_inPearlLoad = previous;
     return hr;
 }
 
@@ -127,12 +127,7 @@ HRESULT __fastcall Hook_Pearl_RepaintInternal(
                layer->clrDesired);
     }
 
-    const bool previous = g_inPearlPaint;
-    g_inPearlPaint = IsStartMenuEnabled() != 0;
-    const HRESULT hr =
-        pOriginalPearl_RepaintInternal(pThis, hdc, target, pData);
-    g_inPearlPaint = previous;
-    return hr;
+    return pOriginalPearl_RepaintInternal(pThis, hdc, target, pData);
 }
 
 typedef void (__fastcall *Pearl_UpdateLayerVisibility_t)(void* pThis);
