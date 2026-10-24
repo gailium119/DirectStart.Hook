@@ -136,9 +136,22 @@ static LRESULT CALLBACK MenuWheelSubclass(
         HWND list = host
             ? FindDescendantWindow(host, L"SysListView32")
             : nullptr;
-        if (list && list != hwnd)
+        if (list)
         {
-            return SendMessageW(list, uMsg, wParam, lParam);
+            const int delta =
+                static_cast<short>(HIWORD(wParam));
+            if (delta != 0)
+            {
+                const int lines =
+                    (abs(delta) / WHEEL_DELTA) * 3;
+                const WPARAM scroll =
+                    MAKEWPARAM(delta > 0 ? SB_LINEUP : SB_LINEDOWN, 0);
+                for (int i = 0; i < lines; ++i)
+                {
+                    SendMessageW(list, WM_VSCROLL, scroll, 0);
+                }
+            }
+            return 0;
         }
 
         if (hwnd != list)
@@ -468,6 +481,7 @@ void __thiscall Hook_GridPane_OnControlUIReady(void* pThis)
 {
     DS_Log(L"GridPane::OnControlUIReady: this=%p", pThis);
     pOriginalGridPane_OnControlUIReady(pThis);
+    InstallStartMenuWheelForwarding();
     DumpStartMenuWindowTree(L"OnControlUIReady");
 }
 
