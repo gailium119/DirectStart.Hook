@@ -48,9 +48,8 @@ typedef HRESULT (__fastcall *CDesktopHost_AcquireSearchServices_t)(
 );
 CDesktopHost_AcquireSearchServices_t pOriginalCDesktopHost_AcquireSearchServices = nullptr;
 
-typedef int (__fastcall *CDesktopHost_FilterMouseWheel_t)(
-    void* pThis, MSG* msg, HWND hwnd);
-CDesktopHost_FilterMouseWheel_t pfnCDesktopHost_FilterMouseWheel = nullptr;
+typedef int (__fastcall *CDesktopHost_IsDialogMessage_t)(void* pThis, MSG* msg);
+CDesktopHost_IsDialogMessage_t pfnCDesktopHost_IsDialogMessage = nullptr;
 static void* g_pDeskHost = nullptr;
 
 BOOL __fastcall Hook_CDesktopHost__AddWin32Controls(void* pThis)
@@ -172,36 +171,29 @@ bool ForwardMenuWheel(WPARAM wParam, LPARAM lParam)
 {
     HWND host = FindWindowW(L"DV2ControlHost", nullptr);
 
-    if (g_pDeskHost && pfnCDesktopHost_FilterMouseWheel)
+    if (host && g_pDeskHost && pfnCDesktopHost_IsDialogMessage)
     {
-        const POINT point = {
-            static_cast<SHORT>(LOWORD(lParam)),
-            static_cast<SHORT>(HIWORD(lParam))};
-        HWND target = WindowFromPoint(point);
-        if (!target || (host && !IsChild(host, target) && target != host))
+        MSG msg = {};
+        msg.hwnd = host;
+        msg.message = WM_MOUSEWHEEL;
+        msg.wParam = wParam;
+        msg.lParam = lParam;
+        msg.time = GetTickCount();
+        msg.pt.x = static_cast<LONG>(static_cast<SHORT>(LOWORD(lParam)));
+        msg.pt.y = static_cast<LONG>(static_cast<SHORT>(HIWORD(lParam)));
+
+        const int handled =
+            pfnCDesktopHost_IsDialogMessage(g_pDeskHost, &msg);
+        if (handled)
         {
-            target = host;
-        }
-        if (target)
-        {
-            MSG msg = {};
-            msg.hwnd = target;
-            msg.message = WM_MOUSEWHEEL;
-            msg.wParam = wParam;
-            msg.lParam = lParam;
-            const int handled =
-                pfnCDesktopHost_FilterMouseWheel(g_pDeskHost, &msg, target);
-            if (handled)
+            static LONG s_nativeLogged = 0;
+            if (InterlockedIncrement(&s_nativeLogged) <= 20)
             {
-                static LONG s_nativeLogged = 0;
-                if (InterlockedIncrement(&s_nativeLogged) <= 20)
-                {
-                    DS_Log(
-                        L"Start menu wheel handled by CDesktopHost::_FilterMouseWheel hwnd=%p",
-                        target);
-                }
-                return true;
+                DS_Log(
+                    L"Start menu wheel handled by CDesktopHost::_IsDialogMessage host=%p",
+                    host);
             }
+            return true;
         }
     }
 
@@ -253,12 +245,6 @@ static LRESULT CALLBACK MenuWheelSubclass(
     return DefSubclassProc(hwnd, uMsg, wParam, lParam);
 }
 
-static BOOL CALLBACK SubclassWheelWindow(HWND hwnd, LPARAM)
-{
-    SetWindowSubclass(hwnd, MenuWheelSubclass, 0xD15, 0);
-    return TRUE;
-}
-
 void InstallStartMenuWheelForwarding()
 {
     HWND host = FindWindowW(L"DV2ControlHost", nullptr);
@@ -267,8 +253,9 @@ void InstallStartMenuWheelForwarding()
         return;
     }
 
+    // Only subclass the top-level menu window; subclassing every DirectUI
+    // child made Explorer unstable.
     SetWindowSubclass(host, MenuWheelSubclass, 0xD15, 0);
-    EnumChildWindows(host, SubclassWheelWindow, 0);
     static LONG s_logged = 0;
     if (InterlockedIncrement(&s_logged) <= 8)
     {
@@ -683,8 +670,8 @@ BOOL InitializeExplorerHooks()
             &pOriginalCDesktopHost_AcquireSearchServices, Hook_CDesktopHost_AcquireSearchServices, false
         },
         {
-            { L"private: int __cdecl CDesktopHost::_FilterMouseWheel(struct tagMSG *,struct HWND__ *)" },
-            &pfnCDesktopHost_FilterMouseWheel, nullptr, true
+            { L"private: int __cdecl CDesktopHost::_IsDialogMessage(struct tagMSG *)" },
+            &pfnCDesktopHost_IsDialogMessage, nullptr, true
         },
         {
             { L"public: virtual long __cdecl CStartMenuGridPane::CreatePane(int,int,int,int,int,struct HWND__ *)" },
