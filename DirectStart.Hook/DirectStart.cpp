@@ -812,13 +812,16 @@ namespace
         return true;
     }
 
-    std::wstring EnsurePdb(HMODULE module)
+    std::wstring EnsurePdb(HMODULE module, bool forceDownload = false)
     {
         static std::unordered_map<HMODULE, std::wstring> cache;
-        const auto cached = cache.find(module);
-        if (cached != cache.end())
+        if (!forceDownload)
         {
-            return cached->second;
+            const auto cached = cache.find(module);
+            if (cached != cache.end())
+            {
+                return cached->second;
+            }
         }
 
         const std::wstring modulePath = GetModulePathW(module);
@@ -845,34 +848,38 @@ namespace
             directory + L"\\" + moduleName + L".pdb";
         const bool exists =
             GetFileAttributesW(pdbPath.c_str()) != INVALID_FILE_ATTRIBUTES;
-        const bool stale = exists && FileTimeOlderThan(pdbPath, modulePath);
 
-        if (!exists || stale)
+        // Local-first: use an existing PDB even if it is older than the module.
+        // Only re-download when the caller says reading it failed.
+        if (exists && !forceDownload)
         {
-            std::wstring downloaded;
-            if (DownloadPdb(modulePath, pdbPath, downloaded))
-            {
-                cache[module] = downloaded;
-                return downloaded;
-            }
-            if (!exists)
-            {
-                return {};
-            }
-
-            // VnDownloadSymbols deletes the destination before downloading, so
-            // a failed refresh may have removed the stale file as well.
-            if (GetFileAttributesW(pdbPath.c_str()) ==
-                INVALID_FILE_ATTRIBUTES)
-            {
-                return {};
-            }
-
-            DS_Log(
-                L"Symbols: download failed, using stale PDB %s",
-                pdbPath.c_str());
+            DS_Log(L"Symbols: using local PDB %s", pdbPath.c_str());
+            cache[module] = pdbPath;
+            return pdbPath;
         }
 
+        std::wstring downloaded;
+        if (DownloadPdb(modulePath, pdbPath, downloaded))
+        {
+            cache[module] = downloaded;
+            return downloaded;
+        }
+        if (!exists)
+        {
+            return {};
+        }
+
+        // A failed refresh may have removed the local file; do not pretend it
+        // is still available.
+        if (GetFileAttributesW(pdbPath.c_str()) ==
+            INVALID_FILE_ATTRIBUTES)
+        {
+            return {};
+        }
+
+        DS_Log(
+            L"Symbols: download failed, using local PDB %s",
+            pdbPath.c_str());
         cache[module] = pdbPath;
         return pdbPath;
     }
@@ -1454,8 +1461,8 @@ BOOL DS_HookSymbols(
 
     if (!pending.empty())
     {
-        const std::wstring pdbPath = EnsurePdb(module);
-        const std::string pdbAnsi = ToAnsi(pdbPath);
+        std::wstring pdbPath = EnsurePdb(module);
+        std::string pdbAnsi = ToAnsi(pdbPath);
         if (!pdbPath.empty() && !pdbAnsi.empty())
         {
             std::vector<SymbolRequest> requests;
@@ -1476,6 +1483,42 @@ BOOL DS_HookSymbols(
                 rvas,
                 resolved,
                 matchedNames);
+
+            auto countResolved = [&]() -> std::size_t
+            {
+                std::size_t count = 0;
+                for (const PendingSymbol& item : pending)
+                {
+                    if (resolved[item.hookIndex])
+                    {
+                        ++count;
+                    }
+                }
+                return count;
+            };
+
+            // Local PDB was preferred above. If it produced nothing, assume it
+            // is unreadable/mismatched and download a fresh copy, then retry.
+            if (countResolved() == 0 && !requests.empty())
+            {
+                DS_Log(
+                    L"%s: local PDB yielded no symbols; re-downloading",
+                    section.c_str());
+                const std::wstring refreshed = EnsurePdb(module, true);
+                const std::string refreshedAnsi = ToAnsi(refreshed);
+                if (!refreshed.empty() && !refreshedAnsi.empty())
+                {
+                    pdbPath = refreshed;
+                    pdbAnsi = refreshedAnsi;
+                    ResolveSymbolGroup(
+                        pdbAnsi,
+                        imageSize,
+                        requests,
+                        rvas,
+                        resolved,
+                        matchedNames);
+                }
+            }
 
             // A few entries carry an alternative (renamed) symbol name.
             for (const PendingSymbol& item : pending)
@@ -1506,14 +1549,7 @@ BOOL DS_HookSymbols(
                 }
             }
 
-            std::size_t resolvedCount = 0;
-            for (const PendingSymbol& item : pending)
-            {
-                if (resolved[item.hookIndex])
-                {
-                    ++resolvedCount;
-                }
-            }
+            const std::size_t resolvedCount = countResolved();
             DS_Log(
                 L"%s: resolved %llu of %llu pending symbols from %s",
                 section.c_str(),
