@@ -1,4 +1,4 @@
-﻿#include "StartMenuHooks.h"
+#include "StartMenuHooks.h"
 
 // crappy impl for pearl coloring on menu open
 
@@ -132,22 +132,32 @@ HRESULT __fastcall Hook_Pearl_LoadColorizedImage(
         }
         else if (pData->f[8] == PEARL_RT_COLOR_TYPE_START)
         {
-            DWORD l3 = 0;
-            if (PearlLookupLayer3(pData, &l3))
+            DWORD accent = 0;
+            bool haveAccent = PearlLookupLayer3(pData, &accent);
+            if (!haveAccent)
             {
+                accent = GetRTStartMenuColor();
+                haveAccent = accent != 0;
+            }
+
+            if (haveAccent)
+            {
+                // Hover and pressed are separate pearl layers (type 282), but
+                // they must render with the same start-button color. Use the
+                // normal layer's color (including its alpha) for both.
                 const DWORD before = static_cast<DWORD>(pData->f[7]);
-                const DWORD after = (before & 0x00FF0000u) | (l3 & 0xFF00FFFFu);
+                const DWORD after = accent;
                 pData->f[7] = static_cast<int>(after);
                 static LONG s_logged = 0;
                 if (InterlockedIncrement(&s_logged) <= 8)
                 {
-                    DS_Log(L"Pearl RT: layer5 %dx%d d7 0x%08X -> 0x%08X (layer3 0x%08X)",
-                           pData->f[3], pData->f[4], before, after, l3);
+                    DS_Log(L"Pearl RT: layer5 %dx%d unified 0x%08X -> 0x%08X (accent 0x%08X)",
+                           pData->f[3], pData->f[4], before, after, accent);
                 }
             }
             else
             {
-                DS_Log(L"Pearl RT: layer5 %dx%d - brak warstwy 3 w cache, bez zmian",
+                DS_Log(L"Pearl RT: layer5 %dx%d - no accent color, unchanged",
                        pData->f[3], pData->f[4]);
             }
         }
