@@ -12,10 +12,10 @@
  */
 
 #define PEARL_RT_COLOR_TYPE_START 282
-// Both paths consume the value as COLORREF (0x00BBGGRR). #4B0082 ->
-// R=4B, G=00, B=82.
-#define PEARL_COLOR_BGR     0x0082004Bu
-#define PEARL_COLOR_REPAINT 0x0082004Bu
+// Both paths consume the value as COLORREF (0x00BBGGRR). Target outer
+// square: R=24 (0x18), G=0, B=83 (0x53) -> #180053.
+#define PEARL_COLOR_BGR     0x00530018u
+#define PEARL_COLOR_REPAINT 0x00530018u
 #define PEARL_LOGO_RES_ID 11703
 
 DWORD g_pearlGateTls = TLS_OUT_OF_INDEXES;
