@@ -57,9 +57,10 @@ static DWORD GetRTStartMenuColor()
 
 static DWORD ShadeColorBgr(DWORD bgr, int percent)
 {
-    const int b = (bgr & 0xFF) * percent / 100;
+    // COLORREF/BGR: low byte R, middle G, high B.
+    const int r = (bgr & 0xFF) * percent / 100;
     const int g = ((bgr >> 8) & 0xFF) * percent / 100;
-    const int r = ((bgr >> 16) & 0xFF) * percent / 100;
+    const int b = ((bgr >> 16) & 0xFF) * percent / 100;
     return RGB(
         r > 255 ? 255 : r,
         g > 255 ? 255 : g,
@@ -69,9 +70,9 @@ static DWORD ShadeColorBgr(DWORD bgr, int percent)
 static DWORD GetPressedPearlColorBgr()
 {
     const DWORD base = GetRTStartMenuColor();
-    const int b = base & 0xFF;
+    const int r = base & 0xFF;
     const int g = (base >> 8) & 0xFF;
-    const int r = (base >> 16) & 0xFF;
+    const int b = (base >> 16) & 0xFF;
     const int luminance = (r * 299 + g * 587 + b * 114) / 1000;
 
     // Dark accents brighten on press, light accents darken. Keeping a
