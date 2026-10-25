@@ -98,6 +98,16 @@ DWORD __fastcall Hook_ImmersiveColor_GetColor(int type)
                 g_inPearlRepaint,
                 _ReturnAddress());
         }
+
+        // Type 63 is the pressed Pearl color and is returned as ARGB here
+        // (0xFF......). Pearl's compositor consumes COLORREF/BGR; using the
+        // ARGB value directly swaps R/B and turns the press state purple.
+        if ((g_inPearlRepaint || g_inPearlFill || g_inPearlLoad) &&
+            IsStartMenuEnabled())
+        {
+            result = GetRTStartMenuColor();
+            DS_Log(L"Pearl RT: GetColor(63) -> BGR 0x%08X", result);
+        }
     }
 
     // Only override color 282 while the pearl is actually repainting. The
