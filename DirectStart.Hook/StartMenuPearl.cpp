@@ -57,6 +57,20 @@ static DWORD GetRTStartMenuColor()
 
 DWORD __fastcall Hook_ImmersiveColor_GetColor(int type)
 {
+    if (type == 63)
+    {
+        static LONG s_enter63 = 0;
+        if (InterlockedIncrement(&s_enter63) <= 32)
+        {
+            DS_Log(
+                L"Pearl RT: GetColor(63) enter load=%d fill=%d repaint=%d caller=%p",
+                g_inPearlLoad,
+                g_inPearlFill,
+                g_inPearlRepaint,
+                _ReturnAddress());
+        }
+    }
+
     if (g_inPearlFill)
     {
         return GetRTStartMenuColor();
@@ -70,6 +84,21 @@ DWORD __fastcall Hook_ImmersiveColor_GetColor(int type)
     }
 
     DWORD result = pOriginalImmersiveColor_GetColor(type);
+
+    if (type == 63)
+    {
+        static LONG s_result63 = 0;
+        if (InterlockedIncrement(&s_result63) <= 32)
+        {
+            DS_Log(
+                L"Pearl RT: GetColor(63) result=0x%08X load=%d fill=%d repaint=%d caller=%p",
+                result,
+                g_inPearlLoad,
+                g_inPearlFill,
+                g_inPearlRepaint,
+                _ReturnAddress());
+        }
+    }
 
     // Only override color 282 while the pearl is actually repainting. The
     // taskbar's rest logo also queries this immersive color outside
