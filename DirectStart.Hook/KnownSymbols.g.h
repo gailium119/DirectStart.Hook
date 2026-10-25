@@ -22,8 +22,7 @@ struct DS_KNOWN_MODULE
 // explorer.exe
 // Version: 6.3.9600.18231 (winblue_ltsb.160208-0600)
 // SHA256:  03D1316407796B32C03F17F819CCA5BEDE2B0504ECDB7BA3B845C1ED618AE934
-// Source:  _ref/explorer.exe
-static const DS_KNOWN_SYMBOL kExplorerSymbols[] = {
+static const DS_KNOWN_SYMBOL kExplorer18231Symbols[] = {
     { L"CDesktopHost::_AcquireSearchServices", 0x10D1A0 },
     { L"CDesktopHost::_AddWin32Controls", 0x10D340 },
     { L"CDesktopHost::_Create", 0x10DE48 },
@@ -53,11 +52,43 @@ static const DS_KNOWN_SYMBOL kExplorerSymbols[] = {
     { L"DesktopV2_Create", 0x113C78 },
 };
 
+// explorer.exe
+// Version: 6.3.9600.18009 (winblue_ltsb.150810-0600)
+// SHA256:  B2DAAB5598DAB842BEE3C397B46320D1402B44173A6527BCC33D6D28AFFA21E6
+static const DS_KNOWN_SYMBOL kExplorer18009Symbols[] = {
+    { L"CDesktopHost::_AcquireSearchServices", 0x10D170 },
+    { L"CDesktopHost::_AddWin32Controls", 0x10D310 },
+    { L"CDesktopHost::_Create", 0x10DE18 },
+    { L"CDesktopHost::_InitializeSearchPane", 0x10FAF0 },
+    { L"CDesktopHost::_IsDialogMessage", 0x10FF90 },
+    { L"CGridHostElement::Create", 0x13DF58 },
+    { L"CPearl::_IsBottomCornerPosition", 0x1F780 },
+    { L"CPearl::_UpdateState", 0xFDBA4 },
+    { L"CPearl::BuildStartMenu", 0xFCBBC },
+    { L"CPearl::CloseStartMenu", 0xFCC0C },
+    { L"CPearl::DestroyStartMenu", 0xFCC64 },
+    { L"CPearl::DisplayStartMenu", 0xFCCB4 },
+    { L"CPearl::Initialize", 0x32880 },
+    { L"CPearl::IsStartMenuOpen", 0xFD118 },
+    { L"CPearl::OnStartMenuShownOnPearl", 0xFD1EC },
+    { L"CPearl::ShowStartPage", 0xFD30C },
+    { L"CPearl::UpdateTheme", 0x33518 },
+    { L"CStartMenuGridPane::CreatePane", 0x11CA10 },
+    { L"CStartMenuGridPane::GetControl", 0x11D340 },
+    { L"CStartMenuGridPane::OnControlHostingReady", 0x11D5D0 },
+    { L"CStartMenuGridPane::OnControlUIReady", 0x11D660 },
+    { L"CStartMenuGridPane::OnStartMenuVisibilityChanged", 0x11D8D0 },
+    { L"CStartMenuGridPane::OnStartMenuVisibilityChanging", 0x11D920 },
+    { L"CStartMenuHeaderPane::_InitializeUserTile", 0x141C70 },
+    { L"CTray::v_WndProc", 0x1350 },
+    { L"DesktopV2_Build", 0x113BB8 },
+    { L"DesktopV2_Create", 0x113BD8 },
+};
+
 // twinui.dll
 // Version: 6.3.9600.18231 (winblue_ltsb.160208-0600)
 // SHA256:  84CB85F48028C3F2F3EEED233F6A24C36414294477E114CFDD5F522FAFE5570F
-// Source:  _ref/twinui-symbols.dll
-static const DS_KNOWN_SYMBOL kTwinUISymbols[] = {
+static const DS_KNOWN_SYMBOL kTwinUI18231Symbols[] = {
     { L"CAnimatedPearlContentVisual::_RepaintInternal", 0x145788 },
     { L"CGridModelModify::OnNewlyRealizedTilesUpdated", 0x5E90A0 },
     { L"CHostElement::Create", 0x187484 },
@@ -132,11 +163,46 @@ static const DS_KNOWN_SYMBOL kTwinUISymbols[] = {
     { L"GridGrouping::CGroupShaper::OnItemsAdded", 0x3E260 },
 };
 
+// twinui.dll
+// Version: 6.3.9600.20363 (winblue_ltsb.220406-1700)
+// SHA256:  103A1DA3D97E60FA7DB5589FAD607330DEF2164C9CC8A8FDC013DC28F4E43987
+static const DS_KNOWN_SYMBOL kTwinUI20363Symbols[] = {
+    { L"CAnimatedPearlContentVisual::_RepaintInternal", 0x1A5BF8 },
+    { L"CHostElement::Create", 0x14E404 },
+    { L"CImmersiveColor::GetColor", 0x4190 },
+    { L"CImmersiveLauncher::ShowStartView", 0x19A780 },
+    { L"CImmersiveSystemTile::_Initialize", 0x14B790 },
+    { L"CLauncherSettings::GetScaleFactorForPart", 0x1F42C },
+    { L"CLiveTileDataProvider::SubscribeToTiles", 0x43220 },
+    { L"CPearlResourceManager::_UpdateLayerVisibility", 0x189358 },
+    { L"CPearlResourceManager::s_LoadOptionallyColorizedImage", 0x189450 },
+    { L"CSystemTileElement::AdjustNameBaselineLinespacing", 0x14C0B4 },
+    { L"g_launcherSettings", 0x656628 },
+    { L"GetScaledIntFromResource", 0x146240 },
+};
+
+// twinui.dll
+// Version: 6.3.9600.23449 (winblue_ltsb_escrow.260910-1739)
+// SHA256:  EA2A69F0810BDF96290B1846944FE10ED5032133DA6217177D1B3D59C04BAD08
+static const DS_KNOWN_SYMBOL kTwinUI23449Symbols[] = {
+    { L"CAnimatedPearlContentVisual::_RepaintInternal", 0x4998 },
+    { L"CHostElement::Create", 0x7F524 },
+    { L"CImmersiveColor::GetColor", 0x1808D0 },
+    { L"CImmersiveLauncher::ShowStartView", 0x1A7710 },
+    { L"CImmersiveSystemTile::_Initialize", 0x7C990 },
+    { L"CLauncherSettings::GetScaleFactorForPart", 0x187A24 },
+    { L"CLiveTileDataProvider::SubscribeToTiles", 0xDD30 },
+    { L"CPearlResourceManager::_UpdateLayerVisibility", 0x1479D8 },
+    { L"CPearlResourceManager::s_LoadOptionallyColorizedImage", 0x147D70 },
+    { L"CSystemTileElement::AdjustNameBaselineLinespacing", 0x7CFD4 },
+    { L"g_launcherSettings", 0x658628 },
+    { L"GetScaledIntFromResource", 0x78450 },
+};
+
 // dui70.dll
 // Version: 6.3.9600.17415 (winblue_r4.141028-1500)
 // SHA256:  A8190828346071074AE1C00A4C8A817D386C94B20FC4ADF69E825378F68DF894
-// Source:  _ref/dui70.dll
-static const DS_KNOWN_SYMBOL kDui70Symbols[] = {
+static const DS_KNOWN_SYMBOL kDui7017415Symbols[] = {
     { L"DirectUI::DUIXmlParser::CreateElement", 0x11B20 },
     { L"DirectUI::Element::FireEvent", 0x42B0 },
     { L"DirectUI::Element::GetChildren", 0xA5E0 },
@@ -146,26 +212,67 @@ static const DS_KNOWN_SYMBOL kDui70Symbols[] = {
     { L"DirectUI::Value::Release", 0x2760 },
 };
 
+// dui70.dll
+// Version: 6.3.9600.23064 (winblue_ltsb.260205-1531)
+// SHA256:  174134F58D50F6B91FA68B6C4B0CD03DF9DDC020D64CFA99AB3E486B90F85B76
+static const DS_KNOWN_SYMBOL kDui7023064Symbols[] = {
+    { L"DirectUI::DUIXmlParser::CreateElement", 0x11A60 },
+    { L"DirectUI::Element::FireEvent", 0x42B0 },
+    { L"DirectUI::Element::GetChildren", 0xA5E0 },
+    { L"DirectUI::Element::SetClass", 0x7F570 },
+    { L"DirectUI::RichText::SetBaseline", 0x61470 },
+    { L"DirectUI::RichText::SetLineSpacing", 0x61410 },
+    { L"DirectUI::Value::Release", 0x2760 },
+};
+
 static const DS_KNOWN_MODULE kKnownModules[] = {
     {
         L"explorer.exe",
         L"03D1316407796B32C03F17F819CCA5BEDE2B0504ECDB7BA3B845C1ED618AE934",
         L"6.3.9600.18231 (winblue_ltsb.160208-0600)",
-        kExplorerSymbols,
-        _countof(kExplorerSymbols)
+        kExplorer18231Symbols,
+        _countof(kExplorer18231Symbols)
+    },
+    {
+        L"explorer.exe",
+        L"B2DAAB5598DAB842BEE3C397B46320D1402B44173A6527BCC33D6D28AFFA21E6",
+        L"6.3.9600.18009 (winblue_ltsb.150810-0600)",
+        kExplorer18009Symbols,
+        _countof(kExplorer18009Symbols)
     },
     {
         L"twinui.dll",
         L"84CB85F48028C3F2F3EEED233F6A24C36414294477E114CFDD5F522FAFE5570F",
         L"6.3.9600.18231 (winblue_ltsb.160208-0600)",
-        kTwinUISymbols,
-        _countof(kTwinUISymbols)
+        kTwinUI18231Symbols,
+        _countof(kTwinUI18231Symbols)
+    },
+    {
+        L"twinui.dll",
+        L"103A1DA3D97E60FA7DB5589FAD607330DEF2164C9CC8A8FDC013DC28F4E43987",
+        L"6.3.9600.20363 (winblue_ltsb.220406-1700)",
+        kTwinUI20363Symbols,
+        _countof(kTwinUI20363Symbols)
+    },
+    {
+        L"twinui.dll",
+        L"EA2A69F0810BDF96290B1846944FE10ED5032133DA6217177D1B3D59C04BAD08",
+        L"6.3.9600.23449 (winblue_ltsb_escrow.260910-1739)",
+        kTwinUI23449Symbols,
+        _countof(kTwinUI23449Symbols)
     },
     {
         L"dui70.dll",
         L"A8190828346071074AE1C00A4C8A817D386C94B20FC4ADF69E825378F68DF894",
         L"6.3.9600.17415 (winblue_r4.141028-1500)",
-        kDui70Symbols,
-        _countof(kDui70Symbols)
+        kDui7017415Symbols,
+        _countof(kDui7017415Symbols)
+    },
+    {
+        L"dui70.dll",
+        L"174134F58D50F6B91FA68B6C4B0CD03DF9DDC020D64CFA99AB3E486B90F85B76",
+        L"6.3.9600.23064 (winblue_ltsb.260205-1531)",
+        kDui7023064Symbols,
+        _countof(kDui7023064Symbols)
     },
 };

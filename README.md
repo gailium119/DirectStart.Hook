@@ -133,21 +133,28 @@ DirectUI::Element::SetClass=0x247A0
 - 键名：PDB 公共符号名；原 mod 的完整签名会自动归一化。
 - 值格式：`0x12345`（RVA，推荐）、`module+0x12345`、`va+0x7FFB...`（绝对地址）。
 - 已知 SHA-256 的模块直接使用编译进程序的 `KnownSymbols.g.h`，不读取、也不写 `[meta]`。
+- 同一个模块可以包含多个版本，按 `模块名 + SHA-256` 选择；高版本 8.1 没有 PDB 时使用
+  `StartMenuTwinUI.cpp` 的特征码扫描结果生成地址表。
 - 未知 SHA-256 才回退到 INI/PDB；INI 只作为手工/离线地址表。
 - 内置表按 `explorer.exe`、`twinui.dll`、`dui70.dll` 分别记录 SHA-256、文件版本和函数 RVA，
   源文件头部注释如：
   ```cpp
   // explorer.exe
-  // Version: 6.3.9600.18231 (winblue_ltsb.160208-0600)
-  // SHA256:  03D1316407796B32C03F17F819CCA5BEDE2B0504ECDB7BA3B845C1ED618AE934
+  // Version: 6.3.9600.18009 (winblue_ltsb.150810-0600)
+  // SHA256:  B2DAAB5598DAB842BEE3C397B46320D1402B44173A6527BCC33D6D28AFFA21E6
   ```
+- 当前已内置：
+  - `explorer.exe` 6.3.9600.18009 / 18231
+  - `twinui.dll` 6.3.9600.18231 / 20363 / 23449
+  - `dui70.dll` 6.3.9600.17415 / 23064
 - 重新生成内置表：
 
   ```powershell
   python tools/gen_known_symbols.py
   ```
 
-  它读取 `_analyze/symbols/*.tsv`（由 PDB 解析生成）并重写 `DirectStart.Hook/KnownSymbols.g.h`。
+  它读取 `_analyze/symbols/*.tsv` 并重写 `DirectStart.Hook/KnownSymbols.g.h`。高版本 TwinUI
+  的 TSV 由 `tools/check_twinui_signatures.py --emit-tsv` 生成。
 
 示例见 `settings.example.ini`。
 

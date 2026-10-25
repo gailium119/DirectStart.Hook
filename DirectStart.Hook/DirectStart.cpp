@@ -1637,7 +1637,7 @@ BOOL DS_HookSymbols(
             }
         }
 
-        if (!resolved[index] && !item.names.empty())
+        if (!resolved[index] && !item.names.empty() && !known)
         {
             pending.push_back(std::move(item));
         }

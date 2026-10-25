@@ -18,21 +18,49 @@ MODULES = [
         "path": ROOT / "_ref" / "explorer.exe",
         "tsv": ROOT / "_analyze" / "symbols" / "explorer.tsv",
         "version": "6.3.9600.18231 (winblue_ltsb.160208-0600)",
-        "prefix": "kExplorer",
+        "prefix": "kExplorer18231",
+    },
+    {
+        "name": "explorer.exe",
+        "path": Path(r"D:\projects\Codex\kb3033055\55c8e43229f000_explorer.exe"),
+        "tsv": ROOT / "_analyze" / "symbols" / "explorer_18009.tsv",
+        "version": "6.3.9600.18009 (winblue_ltsb.150810-0600)",
+        "prefix": "kExplorer18009",
     },
     {
         "name": "twinui.dll",
         "path": ROOT / "_ref" / "twinui-symbols.dll",
         "tsv": ROOT / "_analyze" / "symbols" / "twinui.tsv",
         "version": "6.3.9600.18231 (winblue_ltsb.160208-0600)",
-        "prefix": "kTwinUI",
+        "prefix": "kTwinUI18231",
+    },
+    {
+        "name": "twinui.dll",
+        "path": ROOT / "_ref" / "twinui-nosymbols.dll",
+        "tsv": ROOT / "_analyze" / "symbols" / "twinui_20363.tsv",
+        "version": "6.3.9600.20363 (winblue_ltsb.220406-1700)",
+        "prefix": "kTwinUI20363",
+    },
+    {
+        "name": "twinui.dll",
+        "path": ROOT / "_ref" / "twinui-nosymbols2.dll",
+        "tsv": ROOT / "_analyze" / "symbols" / "twinui_23449.tsv",
+        "version": "6.3.9600.23449 (winblue_ltsb_escrow.260910-1739)",
+        "prefix": "kTwinUI23449",
     },
     {
         "name": "dui70.dll",
         "path": ROOT / "_ref" / "dui70.dll",
         "tsv": ROOT / "_analyze" / "symbols" / "dui70.tsv",
         "version": "6.3.9600.17415 (winblue_r4.141028-1500)",
-        "prefix": "kDui70",
+        "prefix": "kDui7017415",
+    },
+    {
+        "name": "dui70.dll",
+        "path": ROOT / "_ref" / "dui70 (2).dll",
+        "tsv": ROOT / "_analyze" / "symbols" / "dui70_23064.tsv",
+        "version": "6.3.9600.23064 (winblue_ltsb.260205-1531)",
+        "prefix": "kDui7023064",
     },
 ]
 
@@ -98,7 +126,6 @@ def main():
         lines.append("// " + mod["name"])
         lines.append("// Version: " + mod["version"])
         lines.append("// SHA256:  " + digest)
-        lines.append("// Source:  " + str(mod["path"].relative_to(ROOT)).replace("\\", "/"))
         lines.append(f"static const DS_KNOWN_SYMBOL {arr}[] = {{")
         for name, rva in symbols:
             escaped = name.replace("\\", "\\\\").replace('"', '\\"')

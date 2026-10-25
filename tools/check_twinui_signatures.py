@@ -37,7 +37,7 @@ def load_patterns(source: Path):
     # resolves GetScaleFactorForPart.
     m = re.search(
         r"const char\* pattern\s*=\s*((?:\"(?:[^\"\\]|\\.)*\"\s*)+);",
-        block, re.S)
+        src, re.S)
     if m:
         pats.append(("CLauncherSettings::GetScaleFactorForPart",
                      c_string_concat(m.group(1))))
@@ -110,6 +110,8 @@ def main(argv=None) -> int:
                     default=Path("DirectStart.Hook/StartMenuTwinUI.cpp"))
     ap.add_argument("--dll", type=Path,
                     default=Path("_ref/twinui-symbols.dll"))
+    ap.add_argument("--emit-tsv", type=Path, default=None,
+                    help="write normalized_name<TAB>0xRVA rows for known-symbol tables")
     args = ap.parse_args(argv)
 
     src, _, patterns = load_patterns(args.source)
@@ -117,14 +119,22 @@ def main(argv=None) -> int:
     data = args.dll.read_bytes()
     pe = pefile.PE(str(args.dll), fast_load=True)
     failed = False
+    tsv_rows = []
     for label, pat in patterns:
         hits = find_matches(data, pat)
         if len(hits) == 1:
             rva, sec = offset_to_rva(pe, hits[0])
             print(f"OK   {label}: RVA=0x{rva:X} {sec}")
+            tsv_rows.append((label, rva))
         else:
             failed = True
             print(f"FAIL {label}: {len(hits)} matches")
+
+    if args.emit_tsv:
+        args.emit_tsv.write_text(
+            "".join(f"{n}\t0x{rva:X}\t0x0\n" for n, rva in tsv_rows),
+            encoding="utf-8")
+        print(f"wrote {args.emit_tsv} ({len(tsv_rows)} rows)")
 
     print("\nrequired symbols:")
     pattern_labels = {label for label, _ in patterns}
