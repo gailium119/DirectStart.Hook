@@ -12,10 +12,10 @@
  */
 
 #define PEARL_RT_COLOR_TYPE_START 282
-// Both paths consume the value as COLORREF (0x00BBGGRR). Target outer
-// square: R=24 (0x18), G=0, B=83 (0x53) -> #180053.
+// Pearl's CImmersiveColor::GetColor consumers expect COLORREF
+// (0x00BBGGRR). OverrideColor is stored as ARGB (0xAARRGGBB), the same
+// format DrawStartMenuBackground hands to FillRectARGB.
 #define PEARL_COLOR_BGR     0x00530018u
-#define PEARL_COLOR_REPAINT 0x00530018u
 #define PEARL_LOGO_RES_ID 11703
 
 DWORD g_pearlGateTls = TLS_OUT_OF_INDEXES;
@@ -33,6 +33,14 @@ static_assert(sizeof(PearlLayerRenderData) == 36, "PEARL_LAYER_RENDER_DATA size"
 typedef DWORD (__fastcall *ImmersiveColor_GetColor_t)(int type);
 ImmersiveColor_GetColor_t pOriginalImmersiveColor_GetColor = nullptr;
 
+static DWORD ArgbToColorRef(DWORD argb)
+{
+    return RGB(
+        (argb >> 16) & 0xFF,
+        (argb >> 8) & 0xFF,
+        argb & 0xFF);
+}
+
 static DWORD GetRTStartMenuColor()
 {
     DWORD value = 0;
@@ -48,25 +56,26 @@ static DWORD GetRTStartMenuColor()
         type == REG_DWORD &&
         cb == sizeof(value))
     {
-        return value;
+        // Explorer's GetStartMenuColor passes this value to FillRectARGB,
+        // so it is ARGB. Pearl needs the converted COLORREF/BGR.
+        return ArgbToColorRef(value);
     }
 
-    // ARGB for the repaint/fill path. The loader path below converts to BGR.
-    return PEARL_COLOR_REPAINT;
+    return PEARL_COLOR_BGR;
 }
 
 DWORD __fastcall Hook_ImmersiveColor_GetColor(int type)
 {
     if (g_inPearlFill)
     {
-        return PEARL_COLOR_BGR;
+        return GetRTStartMenuColor();
     }
 
     if (g_inPearlLoad &&
         (type == 279 || type == 280 || type == PEARL_RT_COLOR_TYPE_START))
     {
-        // Rest must stay white; hover/press colorize with the target purple.
-        return g_pearlState != 0 ? PEARL_COLOR_BGR : 0x00FFFFFFu;
+        // Rest must stay white; hover/press colorize with OverrideColor.
+        return g_pearlState != 0 ? GetRTStartMenuColor() : 0x00FFFFFFu;
     }
 
     DWORD result = pOriginalImmersiveColor_GetColor(type);
@@ -121,7 +130,7 @@ HRESULT __fastcall Hook_Pearl_LoadColorizedImage(
     if (fill)
     {
         // 11701 is the white square baseplate. Force colorization so it fills
-        // the outer square with PEARL_COLOR_BGR instead of staying white.
+        // the outer square with the OverrideColor-derived tint instead of white.
         pData->fColorize = 1;
     }
 

@@ -1156,12 +1156,13 @@ BOOL InitializeTWinUIHooks()
         if (!InitializeTWinUIHooksByPattern(hTwinUI))
             return FALSE;
     }
-    DS_Log(L"Pearl RT build: 2026-10-24 rest-white-v6-wheel13");
+    DS_Log(L"Pearl RT build: 2026-10-24 rest-white-v6-wheel13-override");
     DS_Log(L"Pearl RT hooks (twinui): GetColor=%p LoadColorizedImage=%p RepaintInternal=%p UpdateLayerVisibility=%p",
            pOriginalImmersiveColor_GetColor, pOriginalPearl_LoadColorizedImage,
            pOriginalPearl_RepaintInternal, pOriginalPearl_UpdateLayerVisibility);
     return TRUE;
 }
+
 
 
 
