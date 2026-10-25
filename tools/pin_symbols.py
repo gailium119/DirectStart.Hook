@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Pin known module functions by SHA-256.
 
 This does not guess addresses. Addresses are recorded once (from PDB, IDA or a
@@ -7,13 +7,13 @@ log) and then applied to DirectStart.ini only when the module SHA-256 matches.
 Examples:
   # Print the hash and add addresses for this exact binary
   python tools/pin_symbols.py --module C:/Windows/twinui.dll \
-      --database tools/known_symbols.json \
+      --database _analyze/known_symbols.json \
       --symbol "CImmersiveColor::GetColor=0x1234" \
       --symbol "CPearlResourceManager::_UpdateLayerVisibility=0x5678"
 
   # Apply all addresses stored for the current hash to the INI
   python tools/pin_symbols.py --module C:/Windows/twinui.dll \
-      --database tools/known_symbols.json \
+      --database _analyze/known_symbols.json \
       --ini %LOCALAPPDATA%/DirectStart/DirectStart.ini --apply
 
 The database layout is:
@@ -123,7 +123,7 @@ def main(argv=None) -> int:
     ap.add_argument("--module", required=True, type=Path)
     ap.add_argument("--section", default=None, help="INI section (default: module stem)")
     ap.add_argument("--ini", type=Path, default=None, help="DirectStart.ini path")
-    ap.add_argument("--database", type=Path, default=Path("tools/known_symbols.json"))
+    ap.add_argument("--database", type=Path, default=Path("_analyze/known_symbols.json"))
     ap.add_argument("--symbol", action="append", metavar="NAME=RVA",
                     help="record/apply one function address; repeatable")
     ap.add_argument("--apply", action="store_true",
@@ -181,3 +181,5 @@ def main(argv=None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+

@@ -150,11 +150,13 @@ DirectUI::Element::SetClass=0x247A0
 - 重新生成内置表：
 
   ```powershell
-  python tools/gen_known_symbols.py
+  python tools/gen_known_symbols.py --input _analyze/known_modules.json
   ```
 
-  它读取 `_analyze/symbols/*.tsv` 并重写 `DirectStart.Hook/KnownSymbols.g.h`。高版本 TwinUI
-  的 TSV 由 `tools/check_twinui_signatures.py --emit-tsv` 生成。
+  输入 JSON 是外置文件，不提交到 git（`.gitignore` 已忽略 `_analyze/` 和
+  `tools/known_symbols.json`）。它读取 `_analyze/symbols/*.tsv` 并重写
+  `DirectStart.Hook/KnownSymbols.g.h`。高版本 TwinUI 的 TSV 由
+  `tools/check_twinui_signatures.py --emit-tsv` 生成。
 
 示例见 `settings.example.ini`。
 
@@ -165,13 +167,13 @@ DirectUI::Element::SetClass=0x247A0
 ```powershell
 # 记录（地址来自 PDB/IDA/日志）
 python tools/pin_symbols.py --module C:\Windows\System32\twinui.dll `
-  --database tools/known_symbols.json `
+  --database _analyze/known_symbols.json `
   --symbol "CImmersiveColor::GetColor=0x1AA754" `
   --symbol "CPearlResourceManager::_UpdateLayerVisibility=0x169034"
 
 # 当前二进制 SHA-256 与记录一致时写入 INI
 python tools/pin_symbols.py --module C:\Windows\System32\twinui.dll `
-  --database tools/known_symbols.json `
+  --database _analyze/known_symbols.json `
   --ini %LOCALAPPDATA%\DirectStart\DirectStart.ini --apply
 ```
 

@@ -1,4 +1,4 @@
-# Build output
+﻿# Build output
 /build/
 /obj/
 /.vs/
@@ -9,3 +9,7 @@
 /_libv/
 1.cmd
 /_smoke/
+# Local symbol-generation inputs (do not commit)
+/_analyze/
+/tools/known_symbols.json
+/tools/known_modules.json
