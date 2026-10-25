@@ -11,12 +11,15 @@
  *   - DS_HookSymbols            -> DirectStart.ini + libvalinet PDB lookup
  *
  * Settings (all under HKCU\Software\DirectStart\StartMenu, HKLM fallback):
- *   theme          REG_SZ    optional msstyles file for the start menu
- *   muipath        REG_SZ    optional explorer.exe.mui path
- *   twinui_muipath REG_SZ    optional twinui.dll.mui path
- *   theme_debug    REG_DWORD log intercepted theme classes
- *   log            REG_DWORD write hook/diagnostic messages to the log
- *   enabled        REG_DWORD master switch (default 1)
+ *   theme          REG_SZ    msstyles path; default %ProgramData%\DirectStart\aero.msstyles
+ *   muipath        REG_SZ    explorer.exe.mui; default %ProgramData%\DirectStart\<locale>\explorer.exe.mui,
+ *                            falling back to en-US
+ *   twinui_muipath REG_SZ    twinui.dll.mui; default %ProgramData%\DirectStart\<locale>\twinui.dll.mui,
+ *                            falling back to en-US
+ *   theme_debug    REG_DWORD log intercepted theme classes (default 0)
+ *   log            REG_DWORD write hook/diagnostic messages (default 0; opt-in)
+ *   trace          REG_DWORD reserved trace switch (default 0)
+ *   enabled        REG_DWORD master switch (default 1; only 0 disables)
  *   symbols        REG_SZ    PDB cache directory
  *   ini            REG_SZ    DirectStart.ini path
  */
@@ -26,12 +29,14 @@
 
 #include <windows.h>
 #include <shobjidl.h>
+#include <shlobj.h>
 #include <shlwapi.h>
 #include <uxtheme.h>
 #include <dwmapi.h>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 
 #ifdef _WIN64
 #define STDCALL  __cdecl
@@ -42,6 +47,71 @@
 #endif
 
 EXTERN_C const IID IID_IStartMenuPopup = { 0x3e558c9e, 0x4da7, 0x4129, { 0x8c, 0x7b, 0xf6, 0xb3, 0x36, 0x87, 0x9f, 0x2d } };
+
+static std::wstring GetDirectStartDataDirectory()
+{
+    wchar_t programData[MAX_PATH] = {};
+    if (FAILED(SHGetFolderPathW(
+            nullptr, CSIDL_COMMON_APPDATA, nullptr, SHGFP_TYPE_CURRENT,
+            programData)))
+    {
+        return {};
+    }
+    return std::wstring(programData) + L"\\DirectStart";
+}
+
+static std::wstring GetDefaultThemePath()
+{
+    const std::wstring directory = GetDirectStartDataDirectory();
+    if (directory.empty())
+    {
+        return {};
+    }
+    return directory + L"\\aero.msstyles";
+}
+
+static std::wstring GetSystemLocaleName()
+{
+    wchar_t locale[LOCALE_NAME_MAX_LENGTH] = {};
+    if (!GetUserDefaultLocaleName(locale, _countof(locale)) || !locale[0])
+    {
+        return L"en-US";
+    }
+    return locale;
+}
+
+static std::wstring ResolveMuiPath(
+    PCWSTR configured, LPCWSTR fileName)
+{
+    if (configured && *configured)
+    {
+        return configured;
+    }
+
+    const std::wstring directory = GetDirectStartDataDirectory();
+    if (directory.empty())
+    {
+        return {};
+    }
+
+    const std::wstring locale = GetSystemLocaleName();
+    const std::wstring localized =
+        directory + L"\\" + locale + L"\\" + fileName;
+    if (PathFileExistsW(localized.c_str()))
+    {
+        return localized;
+    }
+
+    const std::wstring fallback =
+        directory + L"\\en-US\\" + fileName;
+    if (PathFileExistsW(fallback.c_str()))
+    {
+        return fallback;
+    }
+
+    // Keep the localized path so LoadLibraryExW logs/returns a useful failure.
+    return localized;
+}
 
 typedef int (WINAPI *LoadStringW_t)(HINSTANCE, UINT, LPWSTR, int);
 LoadStringW_t pOriginalLoadStringW = nullptr;
@@ -401,7 +471,7 @@ BOOL InstallCoCreateInstanceHook()
 
 extern "C" BOOL DirectStartStartMenuInit()
 {
-    DS_SetLogEnabled(TRUE);
+    DS_SetLogEnabled(DS_GetIntSetting(L"log") != 0);
     DS_Log(L"DirectStart start-menu hooks: init (d3d11 build)");
 
     if (!DS_IsEnabled())
@@ -426,17 +496,19 @@ extern "C" BOOL DirectStartStartMenuInit()
     InstallCoCreateInstanceHook();
 
     PCWSTR pszMuiPath = DS_GetStringSetting(L"muipath");
-    g_hExplorerMui = pszMuiPath && *pszMuiPath
+    std::wstring explorerMui = ResolveMuiPath(pszMuiPath, L"explorer.exe.mui");
+    g_hExplorerMui = !explorerMui.empty()
         ? LoadLibraryExW(
-              pszMuiPath, nullptr,
+              explorerMui.c_str(), nullptr,
               LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE)
         : nullptr;
     DS_FreeStringSetting(pszMuiPath);
 
     pszMuiPath = DS_GetStringSetting(L"twinui_muipath");
-    g_hTwinUiMui = pszMuiPath && *pszMuiPath
+    std::wstring twinuiMui = ResolveMuiPath(pszMuiPath, L"twinui.dll.mui");
+    g_hTwinUiMui = !twinuiMui.empty()
         ? LoadLibraryExW(
-              pszMuiPath, nullptr,
+              twinuiMui.c_str(), nullptr,
               LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE)
         : nullptr;
     DS_FreeStringSetting(pszMuiPath);
@@ -504,9 +576,14 @@ extern "C" BOOL DirectStartStartMenuInit()
     }
 
     PCWSTR pszThemePath = DS_GetStringSetting(L"theme");
-    HRESULT themeHr = LoadInactiveTheme(pszThemePath);
-    DS_Log(L"LoadInactiveTheme returned 0x%08X",
-           static_cast<unsigned int>(themeHr));
+    std::wstring themePath = pszThemePath && *pszThemePath
+        ? std::wstring(pszThemePath)
+        : GetDefaultThemePath();
+    HRESULT themeHr = LoadInactiveTheme(
+        themePath.empty() ? nullptr : themePath.c_str());
+    DS_Log(L"LoadInactiveTheme returned 0x%08X (path=%s)",
+           static_cast<unsigned int>(themeHr),
+           themePath.empty() ? L"(none)" : themePath.c_str());
     DS_FreeStringSetting(pszThemePath);
 
     BOOL ok = TRUE;

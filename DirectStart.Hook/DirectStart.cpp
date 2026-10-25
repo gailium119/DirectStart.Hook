@@ -1128,6 +1128,14 @@ void DS_InitLog()
 
     g_dllTimestamp = GetDllTimestamp();
 
+    // Logging is opt-in. Avoid creating a log file unless log=1.
+    if (DS_GetIntSetting(L"log") == 0)
+    {
+        g_logPath.clear();
+        g_logFile = INVALID_HANDLE_VALUE;
+        return;
+    }
+
     std::wstring directory = GetLocalAppDataDirectory();
     std::wstring path;
     if (!directory.empty())

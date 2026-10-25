@@ -145,7 +145,7 @@ namespace
     DWORD WINAPI HookWorker(LPVOID)
     {
         DS_InitLog();
-        DS_SetLogEnabled(TRUE);
+        DS_SetLogEnabled(DS_GetIntSetting(L"log") != 0);
 
         DS_Log(
             L"DirectStart d3d11 proxy starting: module=%p proxy=lazy (first exported call loads System32 d3d11)",
