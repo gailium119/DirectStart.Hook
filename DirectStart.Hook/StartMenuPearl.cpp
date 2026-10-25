@@ -13,8 +13,8 @@
 
 #define PEARL_RT_COLOR_TYPE_START 282
 // Pearl's CImmersiveColor::GetColor consumers expect COLORREF
-// (0x00BBGGRR). OverrideColor is stored as ARGB (0xAARRGGBB), the same
-// format DrawStartMenuBackground hands to FillRectARGB.
+// (0x00BBGGRR). OverrideColor is stored in the same BGR order, so it can be
+// returned directly; do not swap R/B.
 #define PEARL_COLOR_BGR     0x00530018u
 #define PEARL_LOGO_RES_ID 11703
 
@@ -33,14 +33,6 @@ static_assert(sizeof(PearlLayerRenderData) == 36, "PEARL_LAYER_RENDER_DATA size"
 typedef DWORD (__fastcall *ImmersiveColor_GetColor_t)(int type);
 ImmersiveColor_GetColor_t pOriginalImmersiveColor_GetColor = nullptr;
 
-static DWORD ArgbToColorRef(DWORD argb)
-{
-    return RGB(
-        (argb >> 16) & 0xFF,
-        (argb >> 8) & 0xFF,
-        argb & 0xFF);
-}
-
 static DWORD GetRTStartMenuColor()
 {
     DWORD value = 0;
@@ -56,9 +48,8 @@ static DWORD GetRTStartMenuColor()
         type == REG_DWORD &&
         cb == sizeof(value))
     {
-        // Explorer's GetStartMenuColor passes this value to FillRectARGB,
-        // so it is ARGB. Pearl needs the converted COLORREF/BGR.
-        return ArgbToColorRef(value);
+        // OverrideColor is COLORREF/BGR: high byte B, low byte R.
+        return value;
     }
 
     return PEARL_COLOR_BGR;
