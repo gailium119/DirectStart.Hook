@@ -55,18 +55,6 @@ static DWORD GetRTStartMenuColor()
     return PEARL_COLOR_BGR;
 }
 
-static DWORD ShadeColorBgr(DWORD bgr, int percent)
-{
-    // COLORREF/BGR: low byte R, middle G, high B.
-    const int r = (bgr & 0xFF) * percent / 100;
-    const int g = ((bgr >> 8) & 0xFF) * percent / 100;
-    const int b = ((bgr >> 16) & 0xFF) * percent / 100;
-    return RGB(
-        r > 255 ? 255 : r,
-        g > 255 ? 255 : g,
-        b > 255 ? 255 : b);
-}
-
 static DWORD GetPressedPearlColorBgr()
 {
     const DWORD base = GetRTStartMenuColor();
@@ -75,10 +63,10 @@ static DWORD GetPressedPearlColorBgr()
     const int b = (base >> 16) & 0xFF;
     const int luminance = (r * 299 + g * 587 + b * 114) / 1000;
 
-    // Dark accents brighten on press, light accents darken. Keeping a
-    // different luminance from the menu background makes the button visible
-    // even when OverrideColor equals the background.
-    return ShadeColorBgr(base, luminance < 128 ? 145 : 70);
+    // Type 63 is the pressed foreground (the Windows flag). Using the same
+    // OverrideColor as the square makes the flag disappear; pick a contrasting
+    // monochrome instead.
+    return luminance < 160 ? 0x00FFFFFFu : 0x00000000u;
 }
 
 DWORD __fastcall Hook_ImmersiveColor_GetColor(int type)
