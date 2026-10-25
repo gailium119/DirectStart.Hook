@@ -132,12 +132,31 @@ DirectUI::Element::SetClass=0x247A0
 - 节名：`explorer`、`twinui`、`dui70`。
 - 键名：PDB 公共符号名；原 mod 的完整签名会自动归一化。
 - 值格式：`0x12345`（RVA，推荐）、`module+0x12345`、`va+0x7FFB...`（绝对地址）。
-- 解析成功后会自动写回 INI；`[meta]` 保存模块构建指纹，Windows 更新后自动失效并
-  重新解析。
+- 解析成功后会自动写回 INI；`[meta]` 直接保存三个模块的 SHA-256：
+  `explorer.sha256`、`twinui.sha256`、`dui70.sha256`。任一模块变化只让对应节失效。
 - 离线或 PDB 不可用时手工填写；要强制重新解析请删除整个 INI（只删 `[meta]` 会让
   现有值继续被视为手工配置）。
 
 示例见 `settings.example.ini`。
+
+### 用已知 SHA-256 固化地址
+
+`tools/pin_symbols.py` 按模块 SHA-256 记录/恢复函数地址，不猜测地址：
+
+```powershell
+# 记录（地址来自 PDB/IDA/日志）
+python tools/pin_symbols.py --module C:\Windows\System32\twinui.dll `
+  --database tools/known_symbols.json `
+  --symbol "CImmersiveColor::GetColor=0x1AA754" `
+  --symbol "CPearlResourceManager::_UpdateLayerVisibility=0x169034"
+
+# 当前二进制 SHA-256 与记录一致时写入 INI
+python tools/pin_symbols.py --module C:\Windows\System32\twinui.dll `
+  --database tools/known_symbols.json `
+  --ini %LOCALAPPDATA%\DirectStart\DirectStart.ini --apply
+```
+
+数据库按 `模块名 -> SHA256 -> 函数名 -> module+0xRVA` 保存；哈希不匹配时不会套用旧地址。
 
 ## 特征码匹配
 
@@ -154,6 +173,16 @@ PVOID VnPatternFindUnique(HMODULE module, const char* text, SIZE_T* matchCount);
 
 `StartMenuTwinUI.cpp` 的 PDB 失败回退使用它；`??`/`?` 为通配符，匹配只扫描可执行
 节，`VnPatternFindUnique` 仅在唯一匹配时返回地址。
+
+TWinUI 覆盖检查：
+
+```powershell
+python tools/check_twinui_signatures.py `
+  --source DirectStart.Hook/StartMenuTwinUI.cpp `
+  --dll _ref/twinui-symbols.dll
+```
+
+它会验证每个必需符号都有回退特征码/派生逻辑，并在目标 DLL 中确认特征码唯一命中。
 
 ## 代码结构
 

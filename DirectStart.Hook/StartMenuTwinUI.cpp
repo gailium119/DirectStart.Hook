@@ -1,4 +1,4 @@
-﻿#include "StartMenuHooks.h"
+#include "StartMenuHooks.h"
 #include "PatternScan.h"
 
 typedef HRESULT (__thiscall *Element_SetClass_t)(void* pThis, LPCWSTR pszClass);
@@ -1156,7 +1156,19 @@ BOOL InitializeTWinUIHooks()
         if (!InitializeTWinUIHooksByPattern(hTwinUI))
             return FALSE;
     }
-    DS_Log(L"Pearl RT build: 2026-10-24 rest-white-v6-wheel13-press63-contrast");
+    if (!pfnGetScaledIntFromResource ||
+        !pfnGetScaleFactorForPart ||
+        !g_pLauncherSettings ||
+        !pOriginalCImmersiveLauncher_ShowStartView ||
+        !pOriginalCSystemTileElement_AdjustNameBaselineLinespacing ||
+        !pOriginalCImmersiveSystemTile__Initialize ||
+        !pOriginalCHostElement_Create)
+    {
+        DS_Log(L"TWinUI required pattern coverage incomplete");
+        return FALSE;
+    }
+
+    DS_Log(L"Pearl RT build: 2026-10-24 rest-white-v6-wheel13-sha-pin");
     DS_Log(L"Pearl RT hooks (twinui): GetColor=%p LoadColorizedImage=%p RepaintInternal=%p UpdateLayerVisibility=%p",
            pOriginalImmersiveColor_GetColor, pOriginalPearl_LoadColorizedImage,
            pOriginalPearl_RepaintInternal, pOriginalPearl_UpdateLayerVisibility);

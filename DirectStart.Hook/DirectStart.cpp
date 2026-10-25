@@ -12,6 +12,7 @@
 #include "DirectStart.h"
 
 #include <shlobj.h>
+#include <bcrypt.h>
 
 #include <algorithm>
 #include <cstdarg>
@@ -38,6 +39,7 @@
 #include "MinHook.h"
 
 #pragma comment(lib, "Shell32.lib")
+#pragma comment(lib, "Bcrypt.lib")
 
 namespace
 {
@@ -515,25 +517,117 @@ namespace
         return section;
     }
 
-    std::wstring GetModuleFingerprint(const std::wstring& modulePath)
+    std::wstring GetFileSha256(const std::wstring& modulePath)
     {
-        WIN32_FILE_ATTRIBUTE_DATA data = {};
-        if (modulePath.empty() ||
-            !GetFileAttributesExW(
-                modulePath.c_str(), GetFileExInfoStandard, &data))
+        if (modulePath.empty())
         {
             return {};
         }
 
-        wchar_t buffer[64] = {};
-        swprintf_s(
-            buffer,
-            L"%08lX%08lX-%08lX%08lX",
-            data.ftLastWriteTime.dwHighDateTime,
-            data.ftLastWriteTime.dwLowDateTime,
-            data.nFileSizeHigh,
-            data.nFileSizeLow);
-        return buffer;
+        HANDLE file = CreateFileW(
+            modulePath.c_str(),
+            GENERIC_READ,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            nullptr,
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL,
+            nullptr);
+        if (file == INVALID_HANDLE_VALUE)
+        {
+            return {};
+        }
+
+        BCRYPT_ALG_HANDLE algorithm = nullptr;
+        BCRYPT_HASH_HANDLE hash = nullptr;
+        DWORD objectLength = 0;
+        DWORD hashLength = 0;
+        DWORD resultLength = 0;
+        std::vector<BYTE> object;
+        std::vector<BYTE> digest;
+        std::wstring result;
+
+        NTSTATUS status = BCryptOpenAlgorithmProvider(
+            &algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0);
+        if (status >= 0)
+        {
+            status = BCryptGetProperty(
+                algorithm,
+                BCRYPT_OBJECT_LENGTH,
+                reinterpret_cast<PUCHAR>(&objectLength),
+                sizeof(objectLength),
+                &resultLength,
+                0);
+        }
+        if (status >= 0)
+        {
+            status = BCryptGetProperty(
+                algorithm,
+                BCRYPT_HASH_LENGTH,
+                reinterpret_cast<PUCHAR>(&hashLength),
+                sizeof(hashLength),
+                &resultLength,
+                0);
+        }
+        if (status >= 0 && objectLength && hashLength)
+        {
+            object.resize(objectLength);
+            digest.resize(hashLength);
+            status = BCryptCreateHash(
+                algorithm,
+                &hash,
+                object.data(),
+                objectLength,
+                nullptr,
+                0,
+                0);
+        }
+        if (status >= 0)
+        {
+            BYTE buffer[64 * 1024];
+            DWORD read = 0;
+            while (ReadFile(file, buffer, sizeof(buffer), &read, nullptr) &&
+                   read != 0)
+            {
+                status = BCryptHashData(hash, buffer, read, 0);
+                if (status < 0)
+                {
+                    break;
+                }
+            }
+        }
+        if (status >= 0)
+        {
+            status = BCryptFinishHash(
+                hash, digest.data(), static_cast<ULONG>(digest.size()), 0);
+        }
+        if (status >= 0)
+        {
+            static const wchar_t kHex[] = L"0123456789ABCDEF";
+            result.resize(digest.size() * 2);
+            for (size_t i = 0; i < digest.size(); ++i)
+            {
+                result[i * 2] = kHex[digest[i] >> 4];
+                result[i * 2 + 1] = kHex[digest[i] & 0x0F];
+            }
+        }
+
+        if (hash)
+        {
+            BCryptDestroyHash(hash);
+        }
+        if (algorithm)
+        {
+            BCryptCloseAlgorithmProvider(algorithm, 0);
+        }
+        CloseHandle(file);
+        return result;
+    }
+
+    std::wstring GetModuleFingerprint(const std::wstring& modulePath)
+    {
+        // Cache identity is the module SHA-256. Version/size/time stamps are
+        // not stable enough across servicing and VM snapshots.
+        return GetFileSha256(modulePath);
     }
 
     bool ParseAddress(
@@ -1405,10 +1499,19 @@ BOOL DS_HookSymbols(
     // The INI is a cache of addresses for this exact build. A fingerprint
     // mismatch means Windows was updated: ignore the old section and resolve
     // fresh addresses instead of patching the wrong code.
-    const std::wstring storedFingerprint =
-        Trim(GetIniString(L"meta", section.c_str()));
+    std::wstring storedFingerprint =
+        Trim(GetIniString(L"meta", (section + L".sha256").c_str()));
+    if (storedFingerprint.empty())
+    {
+        storedFingerprint = Trim(GetIniString(L"meta", section.c_str()));
+    }
     const bool iniTrusted =
         storedFingerprint.empty() || storedFingerprint == fingerprint;
+    DS_Log(
+        L"%s: SHA256=%s cached=%s",
+        section.c_str(),
+        fingerprint.c_str(),
+        storedFingerprint.c_str());
     if (!iniTrusted)
     {
         DS_Log(
@@ -1435,6 +1538,9 @@ BOOL DS_HookSymbols(
                 }
             }
         }
+
+        SetIniString(L"meta", section.c_str(), L"");
+        SetIniString(L"meta", (section + L".sha256").c_str(), L"");
     }
 
     std::vector<DWORD> rvas(count, 0);
@@ -1651,7 +1757,11 @@ BOOL DS_HookSymbols(
     // build are (at least partially) cached.
     if (!fingerprint.empty() && storedFingerprint != fingerprint)
     {
+        // Keep both the legacy section key and an explicit sha256 key. The
+        // three modules (explorer/twinui/dui70) therefore each have a SHA-256
+        // entry under [meta].
         SetIniString(L"meta", section.c_str(), fingerprint);
+        SetIniString(L"meta", (section + L".sha256").c_str(), fingerprint);
     }
 
     BOOL allRequired = TRUE;

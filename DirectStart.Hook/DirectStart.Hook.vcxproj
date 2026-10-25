@@ -63,7 +63,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ModuleDefinitionFile>d3d11.def</ModuleDefinitionFile>
-      <AdditionalDependencies>DbgHelp.lib;Winhttp.lib;Wininet.lib;Shell32.lib;Advapi32.lib;User32.lib;Ole32.lib;Dwmapi.lib;Shlwapi.lib;Comctl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>DbgHelp.lib;Winhttp.lib;Wininet.lib;Shell32.lib;Advapi32.lib;User32.lib;Ole32.lib;Dwmapi.lib;Shlwapi.lib;Comctl32.lib;Bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -84,7 +84,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ModuleDefinitionFile>d3d11.def</ModuleDefinitionFile>
-      <AdditionalDependencies>DbgHelp.lib;Winhttp.lib;Wininet.lib;Shell32.lib;Advapi32.lib;User32.lib;Ole32.lib;Dwmapi.lib;Shlwapi.lib;Comctl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>DbgHelp.lib;Winhttp.lib;Wininet.lib;Shell32.lib;Advapi32.lib;User32.lib;Ole32.lib;Dwmapi.lib;Shlwapi.lib;Comctl32.lib;Bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -124,4 +124,5 @@
     <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.targets" />
   </ImportGroup>
 </Project>
+
 
