@@ -104,10 +104,11 @@ HKEY_LOCAL_MACHINE\SOFTWARE\DirectStart\StartMenu
 | --- | --- | --- | --- |
 | `enabled` | REG_DWORD | 1 | 0 = 关闭开始菜单钩子 |
 | `log` | REG_DWORD | 0 | 1 = 运行期详细日志 |
-| `theme` | REG_SZ | 空 | 开始菜单专用 msstyles 路径 |
-| `muipath` | REG_SZ | 空 | explorer.exe.mui 路径 |
-| `twinui_muipath` | REG_SZ | 空 | twinui.dll.mui 路径 |
+| `theme` | REG_SZ | `%ProgramData%\DirectStart\aero.msstyles` | 开始菜单专用 msstyles 路径 |
+| `muipath` | REG_SZ | `%ProgramData%\DirectStart\<系统语言>\explorer.exe.mui`，缺失时 en-US | explorer.exe.mui 路径 |
+| `twinui_muipath` | REG_SZ | `%ProgramData%\DirectStart\<系统语言>\twinui.dll.mui`，缺失时 en-US | twinui.dll.mui 路径 |
 | `theme_debug` | REG_DWORD | 0 | 记录主题类名 |
+| `trace` | REG_DWORD | 0 | 预留 trace 开关，默认关闭 |
 | `symbols` | REG_SZ | 空 | PDB 目录（默认 `%LOCALAPPDATA%\DirectStart\symbols`） |
 | `ini` | REG_SZ | 空 | INI 路径（默认 `%LOCALAPPDATA%\DirectStart\DirectStart.ini`） |
 
@@ -226,7 +227,7 @@ python tools/check_twinui_signatures.py `
 ## 日志与符号
 
 - 日志：`%LOCALAPPDATA%\DirectStart\StartMenu.log`（UTF-16），`log=1` 打开运行期日志。
-- 崩溃：VEH 把访问违例/栈回溯写入日志（即使 `log=0`）。
+- 崩溃：`log=1` 时 VEH 把访问违例/栈回溯写入日志；默认 `log=0` 不创建日志文件。
 - PDB：`%LOCALAPPDATA%\DirectStart\symbols\explorer.pdb` 等（平铺），libvalinet
   通过 WinINet 下载；比模块文件旧时自动重新下载。
 - 离线：填写 INI，或把 PDB 放到 `symbols` 目录。
