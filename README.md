@@ -237,3 +237,15 @@ python tools/check_twinui_signatures.py `
 - 符号名依赖 8.1 公共 PDB；twinui 有特征码回退，explorer 没有。
 - 首次启动时若 explorer 已构建开始菜单，钩子可能安装得太晚；重启 explorer 即可。
 - 仅 64 位；Win8.1 实机效果需在目标系统验证。
+
+## 已知现象：All apps 不足一页时文字变黑
+
+这是一个已知的显示差异，当前不修复。
+
+- 当 All apps 条目不足一页、无需滚动时，Explorer 使用 `DesktopProgramsMFU` 的 `SysListView32`，文字为黑色。
+- 当条目超过一页、出现滚动时，Explorer 使用 `Desktop NSCHost` 的 `SysTreeView32`，文字为白色。
+- 两者是 Explorer 的两个独立窗格，并不是简单的一段颜色判断；强制切换窗格会导致开始菜单空白或无法打开。
+- 逐项 `NM_CUSTOMDRAW` 可以统一为白色，但会明显增加列表绘制开销，造成开始菜单卡顿。
+- 通过 `GetThemeColor`/`LVM_SETTEXTCOLOR` 设置文字色又会被 ListView/TreeView 的视觉样式覆盖，无法稳定生效。
+
+因此该现象只在“新装系统、应用数量很少、All apps 不满一页”时出现，通常应用装多后自然消失。若无法接受，可自行安装更多应用或使用第三方开始菜单工具。
