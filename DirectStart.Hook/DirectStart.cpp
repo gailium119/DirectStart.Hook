@@ -10,6 +10,7 @@
  */
 
 #include "DirectStart.h"
+#include "KnownSymbols.g.h"
 
 #include <shlobj.h>
 #include <bcrypt.h>
@@ -1474,6 +1475,42 @@ void* DS_GetLoadStringWTarget()
     return address;
 }
 
+    const DS_KNOWN_MODULE* FindKnownModule(
+        const std::wstring& modulePath,
+        const std::wstring& sha256)
+    {
+        const std::wstring base = BaseName(modulePath);
+        for (const DS_KNOWN_MODULE& known : kKnownModules)
+        {
+            if (_wcsicmp(base.c_str(), known.name) == 0 &&
+                _wcsicmp(sha256.c_str(), known.sha256) == 0)
+            {
+                return &known;
+            }
+        }
+        return nullptr;
+    }
+
+    bool FindKnownRva(
+        const DS_KNOWN_MODULE* known,
+        const std::wstring& name,
+        DWORD* rva)
+    {
+        if (!known || !rva)
+        {
+            return false;
+        }
+        for (std::size_t i = 0; i < known->count; ++i)
+        {
+            if (_wcsicmp(name.c_str(), known->symbols[i].name) == 0)
+            {
+                *rva = known->symbols[i].rva;
+                return true;
+            }
+        }
+        return false;
+    }
+
 BOOL DS_HookSymbols(
     HMODULE module,
     const DS_SYMBOL_HOOK* hooks,
@@ -1496,51 +1533,23 @@ BOOL DS_HookSymbols(
     const std::wstring section = GetModuleSection(module);
     const std::wstring fingerprint = GetModuleFingerprint(modulePath);
 
-    // The INI is a cache of addresses for this exact build. A fingerprint
-    // mismatch means Windows was updated: ignore the old section and resolve
-    // fresh addresses instead of patching the wrong code.
-    std::wstring storedFingerprint =
-        Trim(GetIniString(L"meta", (section + L".sha256").c_str()));
-    if (storedFingerprint.empty())
-    {
-        storedFingerprint = Trim(GetIniString(L"meta", section.c_str()));
-    }
-    const bool iniTrusted =
-        storedFingerprint.empty() || storedFingerprint == fingerprint;
-    DS_Log(
-        L"%s: SHA256=%s cached=%s",
-        section.c_str(),
-        fingerprint.c_str(),
-        storedFingerprint.c_str());
-    if (!iniTrusted)
+    const DS_KNOWN_MODULE* known =
+        FindKnownModule(modulePath, fingerprint);
+    if (known)
     {
         DS_Log(
-            L"%s: INI addresses belong to another build (%s != %s); re-resolving",
+            L"%s: embedded table matched %s SHA256=%s version=%s",
             section.c_str(),
-            storedFingerprint.c_str(),
+            known->name,
+            fingerprint.c_str(),
+            known->version);
+    }
+    else
+    {
+        DS_Log(
+            L"%s: no embedded table for SHA256=%s; falling back to INI/PDB",
+            section.c_str(),
             fingerprint.c_str());
-
-        // Clear every key used by this table. If resolution fails, the next run
-        // must not trust a stale address just because the fingerprint matches.
-        for (std::size_t index = 0; index < count; ++index)
-        {
-            for (std::size_t candidate = 0;
-                 candidate < _countof(hooks[index].symbols) &&
-                     hooks[index].symbols[candidate];
-                 ++candidate)
-            {
-                const std::wstring name =
-                    NormalizeSymbolName(hooks[index].symbols[candidate]);
-                if (!name.empty() &&
-                    !Trim(GetIniString(section.c_str(), name.c_str())).empty())
-                {
-                    SetIniString(section.c_str(), name.c_str(), L"");
-                }
-            }
-        }
-
-        SetIniString(L"meta", section.c_str(), L"");
-        SetIniString(L"meta", (section + L".sha256").c_str(), L"");
     }
 
     std::vector<DWORD> rvas(count, 0);
@@ -1575,8 +1584,23 @@ BOOL DS_HookSymbols(
             }
             item.names.push_back(name);
 
-            if (!iniTrusted)
+            DWORD knownRva = 0;
+            if (known && FindKnownRva(known, name, &knownRva))
             {
+                rvas[index] = knownRva;
+                resolved[index] = TRUE;
+                matchedNames[index] = name;
+                DS_Log(
+                    L"%s: %s from embedded -> module+0x%lX",
+                    section.c_str(),
+                    name.c_str(),
+                    static_cast<unsigned long>(knownRva));
+                break;
+            }
+            if (known)
+            {
+                // Exact SHA-256 match: do not trust an INI entry that might
+                // belong to another build. Missing optional symbols go to PDB.
                 continue;
             }
 
@@ -1753,16 +1777,8 @@ BOOL DS_HookSymbols(
         }
     }
 
-    // Update the build fingerprint whenever we know the addresses for this
-    // build are (at least partially) cached.
-    if (!fingerprint.empty() && storedFingerprint != fingerprint)
-    {
-        // Keep both the legacy section key and an explicit sha256 key. The
-        // three modules (explorer/twinui/dui70) therefore each have a SHA-256
-        // entry under [meta].
-        SetIniString(L"meta", section.c_str(), fingerprint);
-        SetIniString(L"meta", (section + L".sha256").c_str(), fingerprint);
-    }
+    // No [meta] fingerprint cache: known SHA-256 modules are resolved from
+    // KnownSymbols.g.h; unknown modules use INI/PDB without a build cache.
 
     BOOL allRequired = TRUE;
     for (std::size_t index = 0; index < count; ++index)

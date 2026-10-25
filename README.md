@@ -132,10 +132,22 @@ DirectUI::Element::SetClass=0x247A0
 - 节名：`explorer`、`twinui`、`dui70`。
 - 键名：PDB 公共符号名；原 mod 的完整签名会自动归一化。
 - 值格式：`0x12345`（RVA，推荐）、`module+0x12345`、`va+0x7FFB...`（绝对地址）。
-- 解析成功后会自动写回 INI；`[meta]` 直接保存三个模块的 SHA-256：
-  `explorer.sha256`、`twinui.sha256`、`dui70.sha256`。任一模块变化只让对应节失效。
-- 离线或 PDB 不可用时手工填写；要强制重新解析请删除整个 INI（只删 `[meta]` 会让
-  现有值继续被视为手工配置）。
+- 已知 SHA-256 的模块直接使用编译进程序的 `KnownSymbols.g.h`，不读取、也不写 `[meta]`。
+- 未知 SHA-256 才回退到 INI/PDB；INI 只作为手工/离线地址表。
+- 内置表按 `explorer.exe`、`twinui.dll`、`dui70.dll` 分别记录 SHA-256、文件版本和函数 RVA，
+  源文件头部注释如：
+  ```cpp
+  // explorer.exe
+  // Version: 6.3.9600.18231 (winblue_ltsb.160208-0600)
+  // SHA256:  03D1316407796B32C03F17F819CCA5BEDE2B0504ECDB7BA3B845C1ED618AE934
+  ```
+- 重新生成内置表：
+
+  ```powershell
+  python tools/gen_known_symbols.py
+  ```
+
+  它读取 `_analyze/symbols/*.tsv`（由 PDB 解析生成）并重写 `DirectStart.Hook/KnownSymbols.g.h`。
 
 示例见 `settings.example.ini`。
 
