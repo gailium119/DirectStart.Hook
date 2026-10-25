@@ -144,7 +144,7 @@ DirectUI::Element::SetClass=0x247A0
   // SHA256:  B2DAAB5598DAB842BEE3C397B46320D1402B44173A6527BCC33D6D28AFFA21E6
   ```
 - 当前已内置：
-  - `explorer.exe` 6.3.9600.18009 / 18231
+  - `explorer.exe` 6.3.9600.18009 / 18231 / 18460
   - `twinui.dll` 6.3.9600.18231 / 20363 / 23449
   - `dui70.dll` 6.3.9600.17415 / 23064
 - 重新生成内置表：

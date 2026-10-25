@@ -225,6 +225,39 @@ static const DS_KNOWN_SYMBOL kDui7023064Symbols[] = {
     { L"DirectUI::Value::Release", 0x2760 },
 };
 
+// explorer.exe
+// Version: 6.3.9600.18460 (winblue_ltsb.160827-0600)
+// SHA256:  D2FAF086A07A6A72461D62AA9CCD4B18E4C6B4DE253236EFBA339B5920844FAE
+static const DS_KNOWN_SYMBOL kExplorer18460Symbols[] = {
+    { L"CDesktopHost::_AcquireSearchServices", 0x10D1E0 },
+    { L"CDesktopHost::_AddWin32Controls", 0x10D380 },
+    { L"CDesktopHost::_Create", 0x10DE88 },
+    { L"CDesktopHost::_InitializeSearchPane", 0x10FB60 },
+    { L"CDesktopHost::_IsDialogMessage", 0x110000 },
+    { L"CGridHostElement::Create", 0x13E008 },
+    { L"CPearl::_IsBottomCornerPosition", 0x18030 },
+    { L"CPearl::_UpdateState", 0xFDC04 },
+    { L"CPearl::BuildStartMenu", 0xFCC1C },
+    { L"CPearl::CloseStartMenu", 0xFCC6C },
+    { L"CPearl::DestroyStartMenu", 0xFCCC4 },
+    { L"CPearl::DisplayStartMenu", 0xFCD14 },
+    { L"CPearl::Initialize", 0x22620 },
+    { L"CPearl::IsStartMenuOpen", 0xFD178 },
+    { L"CPearl::OnStartMenuShownOnPearl", 0xFD24C },
+    { L"CPearl::ShowStartPage", 0xFD36C },
+    { L"CPearl::UpdateTheme", 0x232B8 },
+    { L"CStartMenuGridPane::CreatePane", 0x11CB40 },
+    { L"CStartMenuGridPane::GetControl", 0x11D470 },
+    { L"CStartMenuGridPane::OnControlHostingReady", 0x11D700 },
+    { L"CStartMenuGridPane::OnControlUIReady", 0x11D790 },
+    { L"CStartMenuGridPane::OnStartMenuVisibilityChanged", 0x11DA00 },
+    { L"CStartMenuGridPane::OnStartMenuVisibilityChanging", 0x11DA50 },
+    { L"CStartMenuHeaderPane::_InitializeUserTile", 0x141D18 },
+    { L"CTray::v_WndProc", 0x1330 },
+    { L"DesktopV2_Build", 0x113C98 },
+    { L"DesktopV2_Create", 0x113CB8 },
+};
+
 static const DS_KNOWN_MODULE kKnownModules[] = {
     {
         L"explorer.exe",
@@ -274,5 +307,12 @@ static const DS_KNOWN_MODULE kKnownModules[] = {
         L"6.3.9600.23064 (winblue_ltsb.260205-1531)",
         kDui7023064Symbols,
         _countof(kDui7023064Symbols)
+    },
+    {
+        L"explorer.exe",
+        L"D2FAF086A07A6A72461D62AA9CCD4B18E4C6B4DE253236EFBA339B5920844FAE",
+        L"6.3.9600.18460 (winblue_ltsb.160827-0600)",
+        kExplorer18460Symbols,
+        _countof(kExplorer18460Symbols)
     },
 };
